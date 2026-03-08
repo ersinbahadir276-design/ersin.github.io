@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Moomoo Tarzı Oyun</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { 
+            background: #2d5a1b;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas { 
+            border: 3px solid #1a3a0a;
+            cursor: none;
+        }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            font-size: 18px;
+        }
+        #canBar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 20px;
+            background: red;
+            border-radius: 10px;
+        }
+        #canDolu {
+            height: 100%;
+            background: lime;
+            border-radius: 10px;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    🌾 Buğday: <span id="bugday">0</span> |
+    🪵 Tahta: <span id="tahta">0</span> |
+    🪨 Taş: <span id="tas">0</span> |
+    🏆 Skor: <span id="skor">0</span>
+</div>
+
+<div id="canBar">
+    <div id="canDolu" style="width:100%"></div>
+</div>
+
+<canvas id="oyun"></canvas>
+
+<script>
+// ==============================
+// OYUN AYARLARI
+// ==============================
+const canvas = document.getElementById('oyun');
+const ctx = canvas.getContext('2d');
+
+canvas.width = 800;
+canvas.height = 600;
+
+const DUNYA_GENISLIK = 2000;
+const DUNYA_YUKSEKLIK = 2000;
+
+// ==============================
+// KAMERA
+// ==============================
+let kamera = { x: 0, y: 0 };
+
+// ==============================
+// OYUNCU
+// ==============================
+let oyuncu = {
+    x: 1000,
+    y: 1000,
+    boyut: 20,
+    hiz: 3,
+    can: 100,
+    maxCan: 100,
+    aci: 0,
+    bugday: 0,
+    tahta: 0,
+    tas: 0,
+    skor: 0,
+    binalar: [],
+    secilenYapi: 'duvar'
+};
+
+// ==============================
+// KAYNAKLAR
+// ==============================
+let kaynaklar = [];
+
+function kaynakOlustur() {
+    // Ağaçlar
+    for(let i = 0; i < 50; i++) {
+        kaynaklar.push({
+            tip: 'agac',
+            x: Math.random() * 1800 + 100,
+            y: Math.random() * 1800 + 100,
+            boyut: 25,
+            can: 3,
+            renk: '#2d8a2d'
+        });
+    }
+    // Taşlar
+    for(let i = 0; i < 30; i++) {
+        kaynaklar.push({
+            tip: 'tas',
+            x: Math.random() * 1800 + 100,
+            y: Math.random() * 1800 + 100,
+            boyut: 20,
+            can: 3,
+            renk: '#888888'
+        });
+    }
+    // Buğday
+    for(let i = 0; i < 40; i++) {
+        kaynaklar.push({
+            tip: 'bugday',
+            x: Math.random() * 1800 + 100,
+            y: Math.random() * 1800 + 100,
+            boyut: 15,
+            can: 2,
+            renk: '#f5c518'
+        });
+    }
+}
+
+// ==============================
+// BOTLAR
+// ==============================
+let botlar = [];
+
+function botOlustur() {
+    for(let i = 0; i < 5; i++) {
+        botlar.push({
+            x: Math.random() * 1800 + 100,
+            y: Math.random() * 1800 + 100,
+            boyut: 20,
+            can: 100,
+            hiz: 1.5,
+            hedefX: Math.random() * 1800 + 100,
+            hedefY: Math.random() * 1800 + 100,
+            renk: `hsl(${Math.random()*360}, 70%, 50%)`,
+            isim: ['Bot1','Bot2','Bot3','Bot4','Bot5'][i],
+            saldirzamanı: 0
+        });
+    }
+}
+
+// ==============================
+// KLAVYE
+// ==============================
+let tuslar = {};
+
+document.addEventListener('keydown', e => {
+    tuslar[e.key.toLowerCase()] = true;
+
+    // Yapı seçimi
+    if(e.key === '1') oyuncu.secilenYapi = 'duvar';
+    if(e.key === '2') oyuncu.secilenYapi = 'kule';
+    if(e.key === '3') oyuncu.secilenYapi = 'cukur';
+});
+
+document.addEventListener('keyup', e => {
+    tuslar[e.key.toLowerCase()] = false;
+});
+
+// ==============================
+// MOUSE
+// ==============================
+let fareX = 0, fareY = 0;
+
+canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    fareX = e.clientX - rect.left;
+    fareY = e.clientY - rect.top;
+    
+    // Oyuncu açısı
+    oyuncu.aci = Math.atan2(
+        fareY - canvas.height/2,
+        fareX - canvas.width/2
+    );
+});
+
+// Saldırı
+canvas.addEventListener('click', e => {
+    saldir();
+    yapiKur();
+});
+
+// ==============================
+// SALDIRI
+// ==============================
+let sonSaldiri = 0;
+
+function saldir() {
+    const simdi = Date.now();
+    if(simdi - sonSaldiri < 500) return;
+    sonSaldiri = simdi;
+
+    // Kaynaklara vur
+    kaynaklar.forEach(kaynak => {
+        const mesafe = hesaplaMesafe(oyuncu, kaynak);
+        if(mesafe < 80) {
+            kaynak.can--;
+            if(kaynak.tip === 'agac') {
+                oyuncu.tahta += 10;
+                oyuncu.skor += 5;
+            }
+            if(kaynak.tip === 'tas') {
+                oyuncu.tas += 10;
+                oyuncu.skor += 5;
+            }
+            if(kaynak.tip === 'bugday') {
+                oyuncu.bugday += 10;
+                oyuncu.can = Math.min(oyuncu.maxCan, oyuncu.can + 10);
+                oyuncu.skor += 3;
+            }
+            guncelleuı();
+        }
+    });
+
+    // Botlara vur
+    botlar.forEach(bot => {
+        const mesafe = hesaplaMesafe(oyuncu, bot);
+        if(mesafe < 80) {
+            bot.can -= 20;
+            oyuncu.skor += 10;
+            guncelleuı();
+        }
+    });
+}
+
+// ==============================
+// YAPI KUR
+// ==============================
+function yapiKur() {
+    if(oyuncu.secilenYapi === 'duvar' && oyuncu.tahta >= 10) {
+        oyuncu.binalar.push({
+            tip: 'duvar',
+            x: oyuncu.x + Math.cos(oyuncu.aci) * 60,
+            y: oyuncu.y + Math.sin(oyuncu.aci) * 60,
+            can: 100
+        });
+        oyuncu.tahta -= 10;
+        guncelleuı();
+    }
+    if(oyuncu.secilenYapi === 'kule' && oyuncu.tas >= 20) {
+        oyuncu.binalar.push({
+            tip: 'kule',
+            x: oyuncu.x + Math.cos(oyuncu.aci) * 60,
+            y: oyuncu.y + Math.sin(oyuncu.aci) * 60,
+            can: 200
+        });
+        oyuncu.tas -= 20;
+        guncelleuı();
+    }
+}
+
+// ==============================
+// MESAFE HESAPLA
+// ==============================
+function hesaplaMesafe(a, b) {
+    return Math.sqrt(
+        Math.pow(a.x - b.x, 2) + 
+        Math.pow(a.y - b.y, 2)
+    );
+}
+
+// ==============================
+// UI GÜNCELLE
+// ==============================
+function guncelleuı() {
+    document.getElementById('bugday').textContent = oyuncu.bugday;
+    document.getElementById('tahta').textContent = oyuncu.tahta;
+    document.getElementById('tas').textContent = oyuncu.tas;
+    document.getElementById('skor').textContent = oyuncu.skor;
+    
+    const canYuzde = (oyuncu.can / oyuncu.maxCan) * 100;
+    document.getElementById('canDolu').style.width = canYuzde + '%';
+}
+
+// ==============================
+// OYUNCU HAREKET
+// ==============================
+function oyuncuHareket() {
+    let dx = 0, dy = 0;
+
+    if(tuslar['w'] || tuslar['arrowup'])    dy -= oyuncu.hiz;
+    if(tuslar['s'] || tuslar['arrowdown'])  dy += oyuncu.hiz;
+    if(tuslar['a'] || tuslar['arrowleft'])  dx -= oyuncu.hiz;
+    if(tuslar['d'] || tuslar['arrowright']) dx += oyuncu.hiz;
+
+    // Çapraz hareket düzelt
+    if(dx !== 0 && dy !== 0) {
+        dx *= 0.707;
+        dy *= 0.707;
+    }
+
+    oyuncu.x = Math.max(oyuncu.boyut, 
+        Math.min(DUNYA_GENISLIK - oyuncu.boyut, oyuncu.x + dx));
+    oyuncu.y = Math.max(oyuncu.boyut, 
+        Math.min(DUNYA_YUKSEKLIK - oyuncu.boyut, oyuncu.y + dy));
+}
+
+// ==============================
+// BOT HAREKET
+// ==============================
+function botHareket() {
+    botlar.forEach(bot => {
+        if(bot.can <= 0) return;
+
+        const oyuncuMesafe = hesaplaMesafe(bot, oyuncu);
+
+        // Oyuncuya yakınsa saldır
+        if(oyuncuMesafe < 300) {
+            bot.hedefX = oyuncu.x;
+            bot.hedefY = oyuncu.y;
+            
+            // Saldır
+            if(oyuncuMesafe < 50) {
+                const simdi = Date.now();
+                if(simdi - bot.saldirzamanı > 1000) {
+                    oyuncu.can -= 10;
+                    bot.saldirzamanı = simdi;
+                    guncelleuı();
+                }
+            }
+        } else {
+            // Rastgele gez
+            const hedefMesafe = hesaplaMesafe(bot, 
+                {x: bot.hedefX, y: bot.hedefY});
+            if(hedefMesafe < 20) {
+                bot.hedefX = Math.random() * 1800 + 100;
+                bot.hedefY = Math.random() * 1800 + 100;
+            }
+        }
+
+        // Hedefe git
+        const aci = Math.atan2(
+            bot.hedefY - bot.y,
+            bot.hedefX - bot.x
+        );
+        bot.x += Math.cos(aci) * bot.hiz;
+        bot.y += Math.sin(aci) * bot.hiz;
+    });
+}
+
+// ==============================
+// ÇİZ
+// ==============================
+function ciz() {
+    // Kamerayı oyuncuya kilitle
+    kamera.x = oyuncu.x - canvas.width/2;
+    kamera.y = oyuncu.y - canvas.height/2;
+
+    // Arka plan
+    ctx.fillStyle = '#4a7c2f';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grid
+    ctx.strokeStyle = '#3d6b25';
+    ctx.lineWidth = 1;
+    const gridBoyut = 100;
+    
+    for(let x = -kamera.x % gridBoyut; x < canvas.width; x += gridBoyut) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+    for(let y = -kamera.y % gridBoyut; y < canvas.height; y += gridBoyut) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+
+    // Kaynakları çiz
+    kaynaklar.forEach(kaynak => {
+        if(kaynak.can <= 0) return;
+        const ekranX = kaynak.x - kamera.x;
+        const ekranY = kaynak.y - kamera.y;
+
+        if(ekranX < -50 || ekranX > canvas.width + 50) return;
+        if(ekranY < -50 || ekranY > canvas.height + 50) return;
+
+        ctx.fillStyle = kaynak.renk;
+        ctx.beginPath();
+
+        if(kaynak.tip === 'agac') {
+            // Ağaç gövdesi
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(ekranX - 5, ekranY, 10, 20);
+            // Yaprak
+            ctx.fillStyle = '#2d8a2d';
+            ctx.arc(ekranX, ekranY, kaynak.boyut, 0, Math.PI * 2);
+        } else if(kaynak.tip === 'tas') {
+            ctx.arc(ekranX, ekranY, kaynak.boyut, 0, Math.PI * 2);
+        } else if(kaynak.tip === 'bugday') {
+            ctx.arc(ekranX, ekranY, kaynak.boyut, 0, Math.PI * 2);
+        }
+
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    });
+
+    // Binaları çiz
+    oyuncu.binalar.forEach(bina => {
+        const ekranX = bina.x - kamera.x;
+        const ekranY = bina.y - kamera.y;
+
+        if(bina.tip === 'duvar') {
+            ctx.fillStyle = '#8B6914';
+            ctx.fillRect(ekranX - 20, ekranY - 20, 40, 40);
+            ctx.strokeStyle = '#5a4510';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(ekranX - 20, ekranY - 20, 40, 40);
+        } else if(bina.tip === 'kule') {
+            ctx.fillStyle = '#888';
+            ctx.fillRect(ekranX - 20, ekranY - 20, 40, 40);
+            ctx.fillStyle = '#666';
+            ctx.fillRect(ekranX - 25, ekranY - 25, 10, 10);
+            ctx.fillRect(ekranX + 15, ekranY - 25, 10, 10);
+        }
+    });
+
+    // Botları çiz
+    botlar.forEach(bot => {
+        if(bot.can <= 0) return;
+        const ekranX = bot.x - kamera.x;
+        const ekranY = bot.y - kamera.y;
+
+        // Bot gövdesi
+        ctx.fillStyle = bot.renk;
+        ctx.beginPath();
+        ctx.arc(ekranX, ekranY, bot.boyut, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Bot ismi
+        ctx.fillStyle = 'white';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(bot.isim, ekranX, ekranY - 30);
+
+        // Bot can barı
+        ctx.fillStyle = 'red';
+        ctx.fillRect(ekranX - 20, ekranY - 28, 40, 5);
+        ctx.fillStyle = 'lime';
+        ctx.fillRect(ekranX - 20, ekranY - 28, (bot.can/100) * 40, 5);
+    });
+
+    // OYUNCUYU ÇİZ
+    const merkezX = canvas.width / 2;
+    const merkezY = canvas.height / 2;
+
+    // Gölge
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(merkezX, merkezY + 5, 22, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Gövde
+    ctx.fillStyle = '#4CAF50';
+    ctx.beginPath();
+    ctx.arc(merkezX, merkezY, oyuncu.boyut, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#2d7a30';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Silah
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(merkezX, merkezY);
+    ctx.lineTo(
+        merkezX + Math.cos(oyuncu.aci) * 40,
+        merkezY + Math.sin(oyuncu.aci) * 40
+    );
+    ctx.stroke();
+
+    // Oyuncu ismi
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sen', merkezX, merkezY - 30);
+
+    // Yapı önizleme
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.fillRect(
+        merkezX + Math.cos(oyuncu.aci) * 60 - 20,
+        merkezY + Math.sin(oyuncu.aci) * 60 - 20,
+        40, 40
+    );
+
+    // Yapı seçim göstergesi
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(10, canvas.height - 60, 200, 50);
+    ctx.fillStyle = 'white';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`[1] Duvar (10🪵) [2] Kule (20🪨)`, 15, canvas.height - 30);
+    ctx.fillText(`Seçili: ${oyuncu.secilenYapi}`, 15, canvas.height - 15);
+}
+
+// ==============================
+// OYUN DÖNGÜSÜ
+// ==============================
+function oyunDongusu() {
+    oyuncuHareket();
+    botHareket();
+
+    // Ölü kaynakları temizle
+    kaynaklar = kaynaklar.filter(k => k.can > 0);
+
+    // Ölü botları temizle
+    botlar = botlar.filter(b => b.can > 0);
+
+    ciz();
+    requestAnimationFrame(oyunDongusu);
+}
+
+// ==============================
+// BAŞLAT
+// ==============================
+kaynakOlustur();
+botOlustur();
+oyunDongusu();
+</script>
+</body>
+</html>
