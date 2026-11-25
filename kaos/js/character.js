@@ -12,6 +12,17 @@ export const PLAYER_CLIPS = {
   interact: 'Interact', pickup: 'PickUp_Table',
 };
 
+// Tek seferlik animasyonların ortak ayarları (yerel ve uzak oyuncu aynı şekilde oynatır)
+export const ONESHOT = {
+  jump: { ts: 2.0, start: 0.2, fade: 0.08 },
+  land: { ts: 1.8, start: 0.12, fade: 0.06 },
+  attack: { ts: 1.7, start: 0.05, fade: 0.06 },
+  heavy: { ts: 1.35, fade: 0.08 },
+  hit: { ts: 0.85, fade: 0.06 },
+  roll: { ts: 1.7, fade: 0.06 },
+  death: { hold: true, fade: 0.12 },
+};
+
 export class Character {
   constructor(gltf, clipMap) {
     this.root = new THREE.Group();
@@ -77,6 +88,7 @@ export class Character {
     a.clampWhenFinished = clamp || hold;
     this.hold = hold;
     this.one = a; this.oneName = name; this.onDone = onDone;
+    this.seq = (this.seq || 0) + 1;
     if (this.cur === a) { a.reset(); a.setEffectiveTimeScale(ts); a.setEffectiveWeight(1); a.play(); }
     else this._go(name, fade, ts);
     a.time = start * a.getClip().duration;

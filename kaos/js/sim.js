@@ -79,15 +79,16 @@ export class Sim {
       this.damageMob(m, A, pid, d > 0.01 ? dx / d : fx, d > 0.01 ? dz / d : fz);
       hits++;
     }
-    if (this.pvp) {
-      for (const q of this.players.values()) {
-        if (q.id === pid || q.dead) continue;
-        const dx = q.x - x, dz = q.z - z, d = Math.hypot(dx, dz);
-        if (d > A.reach + 0.4 || Math.abs(q.y - p.y) > 2) continue;
-        if (d > 0.6 && (dx * fx + dz * fz) / d < A.arc) continue;
-        this.emit(q.id, { t: 'dmg', amt: Math.round(A.dmg * 0.6), kx: r2(dx / (d || 1)), kz: r2(dz / (d || 1)), lift: A.lift, src: p.name || 'oyuncu' });
-        hits++;
-      }
+    // arkadaşlar: itme ve fırlatma her zaman var (komik kısım), can kaybı sadece oda ayarı açıksa
+    for (const q of this.players.values()) {
+      if (q.id === pid || q.dead) continue;
+      const dx = q.x - x, dz = q.z - z, d = Math.hypot(dx, dz);
+      if (d > A.reach + 0.4 || Math.abs(q.y - p.y) > 2) continue;
+      if (d > 0.6 && (dx * fx + dz * fz) / d < A.arc) continue;
+      const ux = d > 0.01 ? dx / d : fx, uz = d > 0.01 ? dz / d : fz;
+      this.emit(q.id, { t: 'dmg', amt: this.pvp ? Math.round(A.dmg * 0.6) : 0, kx: r2(ux * A.knock / 6), kz: r2(uz * A.knock / 6), lift: A.lift * 0.9, src: 'p:' + (p.name || 'oyuncu') });
+      this.emit('*', { t: 'phit', id: q.id, by: pid, x: r2(q.x), y: r2(q.y), z: r2(q.z), big: A.lift > 3 ? 1 : 0 });
+      hits++;
     }
     return hits;
   }

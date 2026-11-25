@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script src="lib/peerjs.min.js"></script>
 <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }</script>
 </head>
 <body>
@@ -34,8 +35,16 @@
     <div id="colors" class="row wrap"></div>
     <label>Şapkan</label>
     <div id="hats" class="row wrap"></div>
-    <button id="btnPlay" class="big">Oyna</button>
+    <button id="btnHost" class="big">Oda Kur</button>
+    <label class="check"><input type="checkbox" id="pvpIn"> Arkadaşlar birbirinin canını azaltabilsin</label>
+    <div class="or">ya da arkadaşının odasına katıl</div>
+    <div class="row">
+      <input id="codeIn" maxlength="5" placeholder="ODA KODU" autocomplete="off" spellcheck="false">
+      <button id="btnJoin">Katıl</button>
+    </div>
+    <div id="menuMsg"></div>
     <details class="howto"><summary>Kontroller</summary>
+      <p><b>Arkadaşlarla:</b> biri "Oda Kur"a basar, çıkan 5 harfli kodu ya da "Paylaş" linkini diğerlerine gönderir. 2–4 kişi oynayabilir. Odayı kuran oyunu kapatmamalı. Tek başına oynamak için de "Oda Kur"a bas.</p>
       <p><b>Telefon:</b> sol tarafta parmağını sürükle (hareket), sağ tarafı sürükle (kamera). Joystick'i kenarda tutarsan depar atarsın. VUR'a uzun basarsan ağır saldırı.</p>
       <p><b>Bilgisayar:</b> <kbd>WASD</kbd> hareket · <kbd>Shift</kbd> depar · <kbd>Alt</kbd> yürü · <kbd>Boşluk</kbd> zıpla · <kbd>C</kbd> çömel · <kbd>Q</kbd> yuvarlan · <kbd>Sol tık</kbd> vur (basılı tut: ağır) · <kbd>Sağ tık</kbd> ağır vuruş · <kbd>G</kbd> dans · <kbd>V</kbd> kamera</p>
     </details>
@@ -48,6 +57,8 @@
     <div class="bar hp"><i id="hpBar"></i></div>
     <div class="bar st"><i id="stBar"></i></div>
   </div>
+  <div id="room"><span>Oda</span><b id="roomCode">…</b><button id="shareBtn" class="mini hidden">Paylaş</button><span id="pvpTag" class="hidden">Dost ateşi açık</span></div>
+  <div id="players"></div>
   <button id="dbg" class="mini">FPS</button>
   <div id="hint"></div>
   <div id="hurt"></div>
@@ -72,6 +83,14 @@
       <button id="muteBtn" class="mini">Ses: açık</button>
     </div>
   </div>
+</div>
+
+<div id="joinScr" class="screen hidden">
+  <div class="card center"><div class="lbar"><i class="indet"></i></div><p id="joinTxt">Bağlanılıyor…</p><button id="btnCancel" class="mini">Vazgeç</button></div>
+</div>
+
+<div id="lost" class="screen hidden">
+  <div class="card center"><h2 class="logo small">BAĞLANTI KOPTU</h2><p>Odayı kuran kişi oyundan çıkmış olabilir.</p><button id="btnBack" class="big">Ana menü</button></div>
 </div>
 
 <div id="dead" class="screen hidden">

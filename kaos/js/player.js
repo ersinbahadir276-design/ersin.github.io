@@ -1,5 +1,6 @@
 // Yerel oyuncu: fizik, hareket ve animasyon durum makinesi.
 import { HALF, WATER } from './world.js';
+import { ONESHOT } from './character.js';
 
 const SPEED = { walk: 1.9, run: 4.6, sprint: 7.2, crouch: 1.5, swim: 2.6 };
 const GRAV = 22, JUMP_V = 7.4;
@@ -34,20 +35,20 @@ export class Player {
 
   hurt(amount, kx = 0, kz = 0, src = '', lift = 0) {
     if (this.state === 'dead' || this.state === 'roll') return false; // yuvarlanırken hasar yok
-    this.hp -= amount; this.lastHurt = this.time;
+    this.hp -= amount; if (amount > 0) this.lastHurt = this.time;
     this.vx += kx * 6; this.vz += kz * 6;
     if (lift > 0 && !this.swim) { this.vy = lift; this.onGround = false; this.y += 0.05; }
     this.events.push('hurt');
     if (this.hp <= 0) { this.die(src); return true; }
     this.state = 'hit'; this.stateT = 0.42; this.dance = false;
-    this.ch.play('hit', { ts: 0.85, fade: 0.06 });
+    this.ch.play('hit', ONESHOT.hit);
     return true;
   }
 
   die(src) {
     if (this.state === 'dead') return;
     this.hp = 0; this.state = 'dead'; this.stateT = 0; this.deathSrc = src;
-    this.ch.play('death', { hold: true, fade: 0.12 });
+    this.ch.play('death', ONESHOT.death);
     this.events.push('die');
   }
 
@@ -84,7 +85,7 @@ export class Player {
         if (this.swim) { this.vy = 4.5; }
         else { this.vy = JUMP_V; this.crouch = false; }
         this.onGround = false; this.swim = false; this.y += 0.05; this.dance = false;
-        ch.play('jump', { ts: 2.0, start: 0.2, fade: 0.08 });
+        ch.play('jump', ONESHOT.jump);
         this.events.push('jump');
       } else if (input.consume('roll') && this.onGround && this.stam >= 18) {
         this.stam -= 18; this.dance = false; this.crouch = false;
@@ -92,17 +93,17 @@ export class Player {
         let dx = mx, dz = mz;
         if (mag < 0.1) { dx = Math.sin(this.ry); dz = Math.cos(this.ry); }
         this.rollDx = dx; this.rollDz = dz; this.ry = Math.atan2(dx, dz);
-        ch.play('roll', { ts: 1.7, fade: 0.06 });
+        ch.play('roll', ONESHOT.roll);
         this.events.push('roll');
       } else if (input.consume('heavy')) {
         this.state = 'heavy'; this.stateT = 1.53 / 1.35; this.dance = false; this.hitDone = false; this.atkE = 0;
         this.ry = camYaw;
-        ch.play('heavy', { ts: 1.35, fade: 0.08 });
+        ch.play('heavy', ONESHOT.heavy);
         this.events.push('heavy');
       } else if (input.consume('attack')) {
         this.state = 'attack'; this.stateT = 0.87 / 1.7; this.dance = false; this.hitDone = false; this.atkE = 0;
         this.ry = camYaw;
-        ch.play('attack', { ts: 1.7, fade: 0.06, start: 0.05 });
+        ch.play('attack', ONESHOT.attack);
         this.events.push('attack');
       }
     } else {
@@ -209,7 +210,7 @@ export class Player {
       this.events.push('land');
       if (this.speed < 2.5 && this.state === 'move') {
         this.state = 'land'; this.stateT = 0.32;
-        this.ch.play('land', { ts: 1.8, start: 0.12, fade: 0.06 });
+        this.ch.play('land', ONESHOT.land);
       }
     }
   }

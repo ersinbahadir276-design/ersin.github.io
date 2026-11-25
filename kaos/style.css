@@ -87,3 +87,26 @@ body.touch #touch { display: block; }
 .float.pow { font-size: 30px; color: #ffd23f; -webkit-text-stroke: 1px #7a3b00; }
 .float.big { font-size: 40px; color: #ff6b35; -webkit-text-stroke: 1.5px #5a1a00; }
 .float.bad { color: #ff7b6b; }
+
+.check { display: flex !important; align-items: center; gap: 8px; text-transform: none !important; letter-spacing: 0 !important; font-size: 13px !important; opacity: 0.85 !important; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: #ff6b35; }
+.or { text-align: center; opacity: 0.6; font-size: 13px; margin: 12px 0 8px; }
+.row input { text-transform: uppercase; letter-spacing: 5px; font-weight: 900; text-align: center; }
+#btnJoin { padding: 0 22px; background: #33b5e5; box-shadow: 0 5px 0 #1c7aa0; font-size: 17px; }
+#btnJoin.pulse { animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 5px 0 #1c7aa0, 0 0 0 7px rgba(51, 181, 229, 0.35); } }
+#menuMsg { min-height: 18px; margin-top: 10px; text-align: center; font-size: 14px; }
+.lbar i.indet { width: 40%; animation: indet 1.2s ease-in-out infinite; }
+@keyframes indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+#joinScr p, #lost p { margin: 10px 0; }
+#room { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; background: rgba(0, 0, 0, 0.35); padding: 5px 10px; border-radius: 10px; font-size: 12px; pointer-events: auto; }
+#room b { font-family: 'Lilita One', 'Nunito', sans-serif; font-weight: 400; font-size: 18px; letter-spacing: 3px; color: #ffd23f; }
+#pvpTag { color: #ff8a7a; font-weight: 900; }
+#hint { top: 52px !important; }
+#players { position: absolute; left: 16px; top: 52px; font-size: 12px; line-height: 1.7; text-shadow: 0 1px 2px #000; }
+#players .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.ptag { position: absolute; left: 0; top: 0; text-align: center; font-size: 13px; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.8); white-space: nowrap; }
+.ptag .php { display: block; margin: 2px auto 0; width: 44px; height: 5px; background: rgba(0, 0, 0, 0.55); border-radius: 3px; overflow: hidden; }
+.ptag .php i { display: block; height: 100%; background: #4ecb71; }
+#lost { z-index: 40; background: rgba(10, 18, 30, 0.7); }
+body.touch #room { top: 6px; }
