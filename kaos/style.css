@@ -79,3 +79,11 @@ body.touch #touch { display: block; }
   button.big { margin-top: 10px; padding: 10px; font-size: 19px; }
   .lbar { margin: 12px 0 8px; }
 }
+
+#labels { position: absolute; inset: 0; overflow: hidden; }
+.mobhp { position: absolute; left: 0; top: 0; width: 54px; height: 7px; background: rgba(0, 0, 0, 0.55); border-radius: 4px; overflow: hidden; border: 1px solid rgba(0, 0, 0, 0.4); }
+.mobhp i { display: block; height: 100%; background: #e94b3c; }
+.float { position: absolute; left: 0; top: 0; font-family: 'Lilita One', 'Nunito', sans-serif; font-size: 20px; color: #fff; text-shadow: 0 2px 0 #000, 0 0 6px rgba(0, 0, 0, 0.6); white-space: nowrap; pointer-events: none; }
+.float.pow { font-size: 30px; color: #ffd23f; -webkit-text-stroke: 1px #7a3b00; }
+.float.big { font-size: 40px; color: #ff6b35; -webkit-text-stroke: 1.5px #5a1a00; }
+.float.bad { color: #ff7b6b; }

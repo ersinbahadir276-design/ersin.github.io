@@ -32,10 +32,11 @@ export class Player {
 
   get busy() { return this.state !== 'move'; }
 
-  hurt(amount, kx = 0, kz = 0, src = '') {
+  hurt(amount, kx = 0, kz = 0, src = '', lift = 0) {
     if (this.state === 'dead' || this.state === 'roll') return false; // yuvarlanırken hasar yok
     this.hp -= amount; this.lastHurt = this.time;
     this.vx += kx * 6; this.vz += kz * 6;
+    if (lift > 0 && !this.swim) { this.vy = lift; this.onGround = false; this.y += 0.05; }
     this.events.push('hurt');
     if (this.hp <= 0) { this.die(src); return true; }
     this.state = 'hit'; this.stateT = 0.42; this.dance = false;
@@ -94,18 +95,23 @@ export class Player {
         ch.play('roll', { ts: 1.7, fade: 0.06 });
         this.events.push('roll');
       } else if (input.consume('heavy')) {
-        this.state = 'heavy'; this.stateT = 1.53 / 1.35; this.dance = false; this.hitDone = false;
+        this.state = 'heavy'; this.stateT = 1.53 / 1.35; this.dance = false; this.hitDone = false; this.atkE = 0;
         this.ry = camYaw;
         ch.play('heavy', { ts: 1.35, fade: 0.08 });
         this.events.push('heavy');
       } else if (input.consume('attack')) {
-        this.state = 'attack'; this.stateT = 0.87 / 1.7; this.dance = false; this.hitDone = false;
+        this.state = 'attack'; this.stateT = 0.87 / 1.7; this.dance = false; this.hitDone = false; this.atkE = 0;
         this.ry = camYaw;
         ch.play('attack', { ts: 1.7, fade: 0.06, start: 0.05 });
         this.events.push('attack');
       }
     } else {
       input.consume('jump'); input.consume('attack'); input.consume('heavy'); input.consume('roll');
+    }
+    // vuruşun isabet anı (animasyonda yumruğun/kolun öne indiği kare)
+    if ((this.state === 'attack' || this.state === 'heavy') && !this.hitDone) {
+      this.atkE += dt;
+      if (this.atkE >= (this.state === 'attack' ? 0.2 : 0.5)) { this.hitDone = true; this.events.push(this.state === 'attack' ? 'impactJab' : 'impactHeavy'); }
     }
     if (this.state !== 'move' && this.state !== 'dead' && this.stateT <= 0) this.state = 'move';
     if (this.dance && mag > 0.1) this.dance = false;
@@ -124,6 +130,8 @@ export class Player {
     if (this.state === 'hit' || !alive) want = 0;
     let tvx = mx * want, tvz = mz * want;
     if (this.state === 'roll') { const rs = this.stateT > 0.25 ? 7.5 : 2.5; tvx = this.rollDx * rs; tvz = this.rollDz * rs; }
+    // vururken bir adım öne atıl
+    if ((this.state === 'attack' || this.state === 'heavy') && !this.hitDone) { const f = this.state === 'heavy' ? 3.2 : 2.2; tvx += Math.sin(this.ry) * f; tvz += Math.cos(this.ry) * f; }
     const acc = this.onGround || this.swim ? (this.state === 'roll' ? 20 : 11) : 2.5;
     this.vx += (tvx - this.vx) * Math.min(1, acc * dt);
     this.vz += (tvz - this.vz) * Math.min(1, acc * dt);

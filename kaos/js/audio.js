@@ -98,6 +98,10 @@ export const sfx = {
   die() { tone(300, 1.3, { type: 'sawtooth', vol: 0.18, slide: -250 }); },
   burn(v = 1) { noise(0.5, { freq: 1500, q: 0.5, vol: 0.22 * v, sweep: -1000 }); },
   task() { [659, 880, 1175].forEach((f, i) => tone(f, 0.25, { type: 'triangle', vol: 0.13, delay: i * 0.09 })); },
+  yelp(v = 1) { tone(900, 0.18, { type: 'triangle', vol: 0.12 * v, slide: 500 }); tone(1300, 0.12, { type: 'sine', vol: 0.06 * v, slide: -400, delay: 0.08 }); },
+  bite(v = 1) { noise(0.06, { freq: 1800, q: 2, vol: 0.3 * v }); tone(140, 0.12, { type: 'square', vol: 0.08 * v, slide: -60 }); },
+  pow(v = 1) { tone(220, 0.15, { type: 'square', vol: 0.12 * v, slide: -120 }); noise(0.1, { freq: 900, vol: 0.4 * v }); },
+  boing(v = 1) { tone(180, 0.35, { type: 'sine', vol: 0.18 * v, slide: 420 }); },
   ui() { tone(880, 0.04, { type: 'square', vol: 0.04 }); },
   deny() { tone(160, 0.12, { type: 'square', vol: 0.06, slide: -40 }); },
 };

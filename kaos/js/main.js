@@ -7,6 +7,8 @@ import { loadAssets } from './assets.js';
 import { Character, PLAYER_CLIPS, addHat, HATS } from './character.js';
 import { Player } from './player.js';
 import { Input } from './input.js';
+import { Sim } from './sim.js';
+import { MobViews } from './mobview.js';
 import { initAudio, sfx, setAmbience, setMuted, isMuted } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -91,6 +93,10 @@ function startGame() {
   scene.add(ch.root);
   G.ch = ch;
   G.player = new Player(G.world, ch);
+  G.myId = 'me';
+  G.sim = new Sim(G.world, { pvp: false });
+  G.sim.addPlayer(G.myId, G.name);
+  G.mobs = new MobViews(scene, G.assets, $('labels'));
   G.yaw = Math.atan2(-G.player.x, -G.player.z);
   G.mode = 'play';
   input.enabled = true;
@@ -119,10 +125,17 @@ function handleEvents() {
       case 'land': sfx.thud(0.35); dust(p, 12); G.shake = Math.max(G.shake, 0.08); break;
       case 'roll': sfx.swing(1); dust(p, 10); break;
       case 'attack': sfx.swing(1); break;
-      case 'heavy': sfx.swing(1.2); setTimeout(() => { sfx.thud(0.5); dust(p, 14); G.shake = Math.max(G.shake, 0.15); }, 520); break;
+      case 'heavy': sfx.swing(1.2); break;
       case 'splash': sfx.splash(); parts.emit(p.x, WATER, p.z, { n: 16, color: '#d8efff', spread: 0.8, speed: 3, up: 4, size: 0.12, life: 0.7 }); break;
       case 'hurt': sfx.hurt(); G.shake = 0.25; flash(); break;
       case 'die': sfx.die(); setTimeout(() => { $('dead').classList.remove('hidden'); }, 1200); break;
+      case 'impactJab': case 'impactHeavy': {
+        const kind = e === 'impactJab' ? 'jab' : 'heavy';
+        const hits = G.sim ? G.sim.attack(G.myId, kind, p.x, p.z, p.ry) : 0;
+        if (kind === 'heavy') { sfx.thud(0.5); dust(p, 14); G.shake = Math.max(G.shake, 0.15); }
+        if (!hits && kind === 'jab') sfx.swing(0.5);
+        break;
+      }
     }
   }
   p.events.length = 0;
@@ -130,6 +143,78 @@ function handleEvents() {
 function dust(p, n) { if (!p.swim) parts.emit(p.x, p.y + 0.1, p.z, { n, color: '#c9b48a', spread: 0.6, speed: 2.2, up: 1.5, size: 0.14, life: 0.6, grav: -4 }); }
 function flash() { const h = $('hurt'); h.style.transition = 'none'; h.style.opacity = '1'; requestAnimationFrame(() => { h.style.transition = 'opacity 0.6s'; h.style.opacity = '0'; }); }
 $('btnRespawn').onclick = () => { $('dead').classList.add('hidden'); G.player.respawn(); input.requestLock(); };
+
+// ---------------------------------------------------------------- simülasyon olayları
+const att = (x, z, max = 40) => Math.max(0, 1 - Math.hypot(x - G.player.x, z - G.player.z) / max);
+const COMIC = ['PAT!', 'ÇAT!', 'POF!', 'TAK!', 'BAM!'];
+function onSimMsg(m) {
+  const p = G.player;
+  switch (m.t) {
+    case 'dmg':
+      p.hurt(m.amt, m.kx, m.kz, m.src, m.lift);
+      floatText('-' + m.amt, p.x, p.y + 2.1, p.z, 'bad');
+      break;
+    case 'mhit': {
+      const big = m.dmg >= 20;
+      sfx.pow(att(m.x, m.z)); sfx.yelp(att(m.x, m.z));
+      if (big) sfx.boing(att(m.x, m.z));
+      parts.emit(m.x, m.y + 0.6, m.z, { n: big ? 18 : 8, color: '#ffe066', spread: 0.4, speed: big ? 6 : 3.5, up: 3, size: 0.12, life: 0.45, grav: -6 });
+      floatText(big ? 'GÜM!' : COMIC[Math.floor(Math.random() * COMIC.length)], m.x, m.y + 1.4, m.z, big ? 'big' : 'pow');
+      if (m.by === G.myId) floatText('-' + m.dmg, m.x + 0.4, m.y + 1.1, m.z, '');
+      break;
+    }
+    case 'mdie': sfx.yelp(1); sfx.thud(0.4); break;
+    case 'howl': { const v = G.mobs.views.get(m.id); if (v) sfx.howl(att(v.x, v.z, 90)); break; }
+    case 'bite': sfx.bite(1); sfx.growl(0.6); break;
+    case 'thud': { const v = G.mobs.views.get(m.id); if (v) { sfx.thud(att(v.x, v.z, 30) * 0.6); parts.emit(v.x, v.y + 0.1, v.z, { n: 10, color: '#c9b48a', spread: 0.6, speed: 2.5, up: 1.6, size: 0.14, life: 0.6, grav: -4 }); } break; }
+  }
+}
+function runSim(dt) {
+  const p = G.player, S = G.sim;
+  S.setPlayer(G.myId, { x: p.x, y: p.y, z: p.z, ry: p.ry, hp: p.hp, dead: p.state === 'dead', crouch: p.crouch, swim: p.swim });
+  S.update(dt);
+  for (const e of S.events) if (e.to === '*' || e.to === G.myId) onSimMsg(e.m);
+  S.events.length = 0;
+  G.mobs.apply(S.snapshot());
+  G.mobs.update(dt);
+  // oyuncu kurtların içinden geçemesin
+  for (const v of G.mobs.views.values()) {
+    if (v.dead) continue;
+    const dx = p.x - v.x, dz = p.z - v.z, d = Math.hypot(dx, dz), m = 0.8;
+    if (d < m && d > 1e-4) { p.x += (dx / d) * (m - d); p.z += (dz / d) * (m - d); }
+  }
+}
+
+// ---------------------------------------------------------------- etiketler ve uçan yazılar
+const pv = new THREE.Vector3();
+function placeEl(el, x, y, z) {
+  pv.set(x, y, z).project(camera);
+  if (pv.z > 1 || Math.abs(pv.x) > 1.2 || Math.abs(pv.y) > 1.2) { if (el._vis !== false) { el.style.display = 'none'; el._vis = false; } return false; }
+  if (el._vis !== true) { el.style.display = ''; el._vis = true; }
+  el.style.transform = `translate(${(((pv.x + 1) / 2) * innerWidth).toFixed(1)}px, ${(((1 - pv.y) / 2) * innerHeight).toFixed(1)}px) translate(-50%, -100%)`;
+  return true;
+}
+const floats = [];
+function floatText(text, x, y, z, cls) {
+  const e = document.createElement('div'); e.className = 'float ' + (cls || ''); e.textContent = text;
+  $('labels').appendChild(e);
+  floats.push({ e, x: x + (Math.random() - 0.5) * 0.5, y, z, t: 0 });
+  if (floats.length > 24) floats.shift().e.remove();
+}
+function updateLabels(dt) {
+  for (const v of G.mobs.views.values()) {
+    if (v.showHp > 0 && !v.dead && Math.hypot(v.x - G.player.x, v.z - G.player.z) < 35) { if (placeEl(v.el, v.x, v.y + 1.25, v.z)) v.hpEl.style.width = v.hp + '%'; }
+    else if (v.el._vis !== false) { v.el.style.display = 'none'; v.el._vis = false; }
+  }
+  for (let i = floats.length - 1; i >= 0; i--) {
+    const f = floats[i]; f.t += dt; f.y += dt * 1.3;
+    placeEl(f.e, f.x, f.y, f.z);
+    f.e.style.opacity = f.t < 0.55 ? 1 : Math.max(0, 1 - (f.t - 0.55) / 0.45);
+    if (f.t === dt) f.e.style.scale = '1.4';
+    else f.e.style.scale = String(Math.max(1, 1.4 - f.t * 3));
+    if (f.t > 1) { f.e.remove(); floats.splice(i, 1); }
+  }
+}
 
 // ---------------------------------------------------------------- kamera
 const camT = new THREE.Vector3();
@@ -185,12 +270,14 @@ function step(dt) {
   input.update(dt);
   G.player.update(dt, input, G.yaw);
   handleEvents();
+  runSim(dt);
   updateCamera(dt);
   G.world.update(dt);
   parts.update(dt);
   if (G.ch.hat && G.ch.hat.userData.spin) G.ch.hat.userData.spin.rotation.y += dt * (6 + G.player.speed * 4);
   sky.update(G.hour, camera, G.player);
   updateHUD(dt);
+  updateLabels(dt);
   input.endFrame();
 }
 
