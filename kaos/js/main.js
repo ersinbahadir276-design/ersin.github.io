@@ -31,7 +31,7 @@ const MAX_PLAYERS = 4;
 // ---------------------------------------------------------------- sahne
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !COARSE, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, COARSE ? 1.5 : 1.75));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, COARSE ? 1.25 : 1.75));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -58,6 +58,7 @@ window.KAOS = G;
 function makeWorld(seed) {
   if (G.world) G.world.dispose();
   G.world = new World(seed >>> 0, scene);
+  if (COARSE && G.world.grass) G.world.grass.count = Math.floor(G.world.grass.count * 0.5); // telefonda daha az çimen
 }
 const SEED_Q = parseInt(QS.get('seed'), 10);
 makeWorld(Number.isFinite(SEED_Q) ? SEED_Q : (Math.random() * 2 ** 31) >>> 0);
@@ -100,13 +101,23 @@ function setupMenu() {
   $('codeIn').addEventListener('input', () => { $('codeIn').value = $('codeIn').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
   $('btnCancel').onclick = () => { location.href = location.pathname; };
   $('btnBack').onclick = () => { location.href = location.pathname; };
+  if (/Android/i.test(navigator.userAgent) && !window.Capacitor) $('apkLink').classList.remove('hidden');
 }
 function setupSaveOption() {
   const sv = loadSave();
   if (sv && sv.structs.length) { $('saveRow').classList.remove('hidden'); $('saveInfo').textContent = `${sv.structs.length} yapı`; }
 }
 function menuMsg(t, good) { const m = $('menuMsg'); m.textContent = t; m.style.color = good ? '#ffd23f' : '#ff8a7a'; }
+function goFullscreen() {
+  if (!COARSE) return;
+  try {
+    const el = document.documentElement;
+    const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
+    if (p && p.then) p.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* yok */ } }).catch(() => {});
+  } catch (e) { /* desteklenmiyor */ }
+}
 function readProfile() {
+  goFullscreen();
   G.name = ($('nameIn').value.trim() || 'Kaosçu' + Math.floor(Math.random() * 90 + 10)).slice(0, 14);
   try { localStorage.setItem('kaos.profile', JSON.stringify({ name: G.name, color: G.color, hat: G.hat })); } catch (e) { /* yok */ }
   initAudio();
@@ -214,7 +225,7 @@ function enterPlay() {
   G.mode = 'play';
   input.enabled = true;
   $('menu').classList.add('hidden'); $('joinScr').classList.add('hidden');
-  $('hud').classList.remove('hidden');
+  $('hud').classList.remove('hidden'); $('ui2').classList.remove('hidden');
   $('roomCode').textContent = G.roomCode || '…';
   $('pvpTag').classList.toggle('hidden', !G.pvp);
   if (COARSE) input.setTouchMode(true);
@@ -633,7 +644,9 @@ $('pause').addEventListener('mousedown', (e) => { if (e.target.closest('.nolock'
 $('muteBtn').onclick = () => { setMuted(!isMuted()); $('muteBtn').textContent = isMuted() ? 'Ses: kapalı' : 'Ses: açık'; };
 $('sens').oninput = () => { input.sens = parseFloat($('sens').value); };
 $('shareBtn').onclick = async () => {
-  const url = location.origin + location.pathname + '?oda=' + G.roomCode;
+  // APK içinden paylaşılan link de herkesin açabileceği web adresine gitsin
+  const base = window.Capacitor || location.hostname === 'localhost' ? 'https://ersinbahadir276-design.github.io/ersin.github.io/kaos/' : location.origin + location.pathname;
+  const url = base + '?oda=' + G.roomCode;
   try {
     if (navigator.share) await navigator.share({ title: 'Kaos Adası', text: `Kaos Adası'na gel! Oda kodu: ${G.roomCode}`, url });
     else { await navigator.clipboard.writeText(url); showHint('Davet linki kopyalandı!', 3000); }
@@ -738,10 +751,26 @@ function menuView(dt) {
   sky.update(G.hour, camera, { x: sp.x, y: h, z: sp.z });
 }
 
+// FPS düşükse kaliteyi kademeli düşür (yalnızca düşürür, gidip gelmez)
+const perf = { t: 0, n: 0, level: 0 };
+function perfGovernor(raw) {
+  if (G.mode !== 'play' || document.hidden || DEBUG || raw > 0.5) return;
+  perf.t += raw; perf.n++;
+  if (perf.t < 4) return;
+  const fps = perf.n / perf.t; perf.t = 0; perf.n = 0;
+  if (fps >= 40 || perf.level >= 3) return;
+  perf.level++;
+  if (perf.level === 1) { renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight); }
+  else if (perf.level === 2) { sky.sun.shadow.mapSize.set(512, 512); if (sky.sun.shadow.map) { sky.sun.shadow.map.dispose(); sky.sun.shadow.map = null; } if (G.world.grass) G.world.grass.count = Math.floor(G.world.grass.count / 2); }
+  else if (perf.level === 3) { renderer.setPixelRatio(0.8); renderer.setSize(innerWidth, innerHeight); sky.sun.castShadow = false; }
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, Math.max(0.0001, (now - G.last) / 1000));
+  const raw = Math.max(0.0001, (now - G.last) / 1000);
+  const dt = Math.min(0.05, raw);
   G.last = now;
+  perfGovernor(raw);
   if (G.mode === 'play') step(dt);
   else if (G.mode !== 'lost') { if (G.mode === 'joining') checkWelcome(); menuView(dt); }
   renderer.render(scene, camera);

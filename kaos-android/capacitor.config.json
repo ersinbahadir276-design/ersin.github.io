@@ -1,0 +1,7 @@
+{
+  "appId": "com.kaosadasi.oyun",
+  "appName": "Kaos Adası",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "android": { "allowMixedContent": false, "captureInput": true }
+}

@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1b2a3a">
 <meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
 <title>Kaos Adası</title>
 <meta name="description" content="Arkadaşlarınla oynanan komik, kaotik 3D hayatta kalma oyunu.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,12 +32,16 @@
   <div class="card">
     <h1 class="logo">KAOS<span>ADASI</span></h1>
     <p class="tag">Garip bir adaya düştün. Keşfet, kaç, savaş… ve bolca düş.</p>
+    <div class="cols">
+    <div class="col">
     <label for="nameIn">Adın</label>
     <input id="nameIn" maxlength="14" placeholder="Kaosçu" autocomplete="off">
     <label>Rengin</label>
     <div id="colors" class="row wrap"></div>
     <label>Şapkan</label>
     <div id="hats" class="row wrap"></div>
+    </div>
+    <div class="col">
     <button id="btnHost" class="big">Oda Kur</button>
     <label class="check"><input type="checkbox" id="pvpIn"> Arkadaşlar birbirinin canını azaltabilsin</label>
     <label class="check hidden" id="saveRow"><input type="checkbox" id="saveIn" checked> Kayıtlı adaya devam et (<span id="saveInfo"></span>)</label>
@@ -44,6 +51,9 @@
       <button id="btnJoin">Katıl</button>
     </div>
     <div id="menuMsg"></div>
+    <a id="apkLink" class="hidden" href="indir/KaosAdasi.apk" download>Android uygulamasını indir (APK, 5 MB)</a>
+    </div>
+    </div>
     <details class="howto"><summary>Kontroller</summary>
       <p><b>Arkadaşlarla:</b> biri "Oda Kur"a basar, çıkan 5 harfli kodu ya da "Paylaş" linkini diğerlerine gönderir. 2–4 kişi oynayabilir. Odayı kuran oyunu kapatmamalı. Tek başına oynamak için de "Oda Kur"a bas.</p>
       <p><b>Telefon:</b> sol tarafta parmağını sürükle (hareket), sağ tarafı sürükle (kamera). Joystick'i kenarda tutarsan depar atarsın. VUR'a uzun basarsan ağır saldırı.</p>
@@ -59,11 +69,8 @@
     <div class="bar hp"><i id="hpBar"></i></div>
     <div class="bar st"><i id="stBar"></i></div>
   </div>
-  <div id="room"><span>Oda</span><b id="roomCode">…</b><button id="shareBtn" class="mini hidden">Paylaş</button><span id="pvpTag" class="hidden">Dost ateşi açık</span></div>
   <div id="players"></div>
   <div id="inv"></div>
-  <div id="buildBar" class="hidden"></div>
-  <button id="dbg" class="mini">FPS</button>
   <div id="hint"></div>
   <div id="hurt"></div>
   <div id="flash"></div>
@@ -82,6 +89,13 @@
   <div class="tbtn" data-act="interact" id="btnInteract" style="right:212px;bottom:30px">TUT</div>
   <div class="tbtn small" data-act="build" style="right:152px;top:70px">İNŞA</div>
   <div class="tbtn small onbuild" data-act="rotate" style="right:212px;bottom:118px">DÖNDÜR</div>
+</div>
+
+<!-- dokunmatik katmanın üstünde kalması gereken, dokunulabilir arayüz -->
+<div id="ui2" class="hidden">
+  <div id="room"><span>Oda</span><b id="roomCode">…</b><button id="shareBtn" class="mini hidden">Paylaş</button><span id="pvpTag" class="hidden">Dost ateşi açık</span></div>
+  <div id="buildBar" class="hidden"></div>
+  <button id="dbg" class="mini">FPS</button>
 </div>
 
 <div id="pause" class="screen hidden">

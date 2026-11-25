@@ -1,0 +1,16 @@
+{
+  "name": "Kaos Adası",
+  "short_name": "Kaos Adası",
+  "description": "Arkadaşlarınla oynanan komik, kaotik 3D hayatta kalma oyunu.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1b2a3a",
+  "theme_color": "#1b2a3a",
+  "lang": "tr",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
