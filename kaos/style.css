@@ -102,7 +102,7 @@ body.touch #touch { display: block; }
 #room { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; background: rgba(0, 0, 0, 0.35); padding: 5px 10px; border-radius: 10px; font-size: 12px; pointer-events: auto; }
 #room b { font-family: 'Lilita One', 'Nunito', sans-serif; font-weight: 400; font-size: 18px; letter-spacing: 3px; color: #ffd23f; }
 #pvpTag { color: #ff8a7a; font-weight: 900; }
-#hint { top: 52px !important; }
+#hint { top: 96px !important; }
 #players { position: absolute; left: 16px; top: 52px; font-size: 12px; line-height: 1.7; text-shadow: 0 1px 2px #000; }
 #players .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 .ptag { position: absolute; left: 0; top: 0; text-align: center; font-size: 13px; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.8); white-space: nowrap; }
@@ -131,3 +131,14 @@ body.building .tbtn[data-act="attack"]::after { content: 'KOY'; position: absolu
 .float.heal { color: #7dff9a; }
 .mini.big2 { padding: 10px 16px; font-size: 15px; background: #ff6b35; }
 #chest { z-index: 28; background: rgba(10, 18, 30, 0.3); }
+
+#flash { position: absolute; inset: 0; background: #eaf4ff; opacity: 0; }
+#banner { position: absolute; left: 0; right: 0; top: 22%; text-align: center; opacity: 0; transform: scale(0.8); transition: opacity 0.4s, transform 0.4s; }
+#banner.show { opacity: 1; transform: scale(1); }
+#bnBig { font-family: 'Lilita One', 'Nunito', sans-serif; font-size: 52px; color: #ff6b35; text-shadow: 0 4px 0 #5a1a00, 0 8px 18px rgba(0, 0, 0, 0.5); letter-spacing: 2px; }
+#banner.gold #bnBig { color: #ffd23f; text-shadow: 0 4px 0 #7a5200, 0 8px 18px rgba(0, 0, 0, 0.5); }
+#bnSmall { font-size: 17px; font-weight: 900; text-shadow: 0 2px 3px #000; margin-top: 4px; }
+#bossBar { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); text-align: center; font-family: 'Lilita One', 'Nunito', sans-serif; font-size: 16px; letter-spacing: 2px; text-shadow: 0 2px 0 #000; }
+#bossBar .bb { width: min(360px, 60vw); height: 12px; background: rgba(0, 0, 0, 0.55); border-radius: 7px; overflow: hidden; border: 2px solid rgba(0, 0, 0, 0.5); margin-top: 3px; }
+#bossBar .bb i { display: block; height: 100%; background: linear-gradient(90deg, #8e1b1b, #e74c3c); transition: width 0.2s; }
+@media (max-height: 520px) { #bnBig { font-size: 36px; } #banner { top: 18%; } }

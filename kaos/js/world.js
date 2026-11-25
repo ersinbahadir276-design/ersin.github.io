@@ -433,7 +433,7 @@ export class World {
   }
 
   collide(x, z, r, y) {
-    let sid = 0;
+    let sid = 0, node = null;
     for (let it = 0; it < 2; it++) {
       const cx = Math.floor(x / GC), cz = Math.floor(z / GC);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
@@ -448,6 +448,7 @@ export class World {
               const d = Math.sqrt(d2) || 0.0001;
               x += (dx / d) * (m - d); z += (dz / d) * (m - d);
               if (c.sid) sid = c.sid;
+              if (c.node) node = c.node;
             }
           } else {
             const cs = Math.cos(c.ry), sn = Math.sin(c.ry);
@@ -469,7 +470,7 @@ export class World {
         }
       }
     }
-    return { x, z, sid };
+    return { x, z, sid, node };
   }
 
   overlaps(x, z, r) {

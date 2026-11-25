@@ -4,14 +4,14 @@ import * as THREE from 'three';
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 const K = [
-  { h: 0, top: '#03060f', hor: '#0d1530', light: 0.0, hemi: 0.3, fogN: 18, fogF: 125 },
-  { h: 4.6, top: '#03060f', hor: '#0d1530', light: 0.0, hemi: 0.3, fogN: 18, fogF: 125 },
+  { h: 0, top: '#060b1c', hor: '#16224a', light: 0.0, hemi: 0.55, fogN: 25, fogF: 150 },
+  { h: 4.6, top: '#060b1c', hor: '#16224a', light: 0.0, hemi: 0.55, fogN: 25, fogF: 150 },
   { h: 5.6, top: '#2b3a6b', hor: '#e3916a', light: 0.5, hemi: 0.5, fogN: 35, fogF: 200 },
   { h: 7.0, top: '#4b8ed8', hor: '#cfe4f4', light: 1.0, hemi: 0.95, fogN: 70, fogF: 320 },
   { h: 17.2, top: '#4b8ed8', hor: '#cfe4f4', light: 1.0, hemi: 0.95, fogN: 70, fogF: 320 },
   { h: 18.8, top: '#384d86', hor: '#f29b5c', light: 0.55, hemi: 0.6, fogN: 45, fogF: 240 },
-  { h: 20.2, top: '#0b1026', hor: '#1d2650', light: 0.0, hemi: 0.33, fogN: 20, fogF: 140 },
-  { h: 24, top: '#03060f', hor: '#0d1530', light: 0.0, hemi: 0.3, fogN: 18, fogF: 125 },
+  { h: 20.2, top: '#0b1026', hor: '#1d2650', light: 0.0, hemi: 0.55, fogN: 25, fogF: 150 },
+  { h: 24, top: '#060b1c', hor: '#16224a', light: 0.0, hemi: 0.55, fogN: 25, fogF: 150 },
 ].map((k) => ({ ...k, top: new THREE.Color(k.top), hor: new THREE.Color(k.hor) }));
 
 const VS = `varying vec3 vDir;
@@ -98,7 +98,7 @@ export class Sky {
       this.sun.intensity = 2.7 * Math.max(light, 0.25) * smooth(0, 0.14, elev);
       this.sun.color.setRGB(1, 0.72 + 0.26 * smooth(0, 0.45, elev), 0.5 + 0.42 * smooth(0, 0.45, elev));
     } else {
-      this.sun.intensity = 0.55 * smooth(0, 0.14, elev);
+      this.sun.intensity = 0.8 * smooth(0, 0.14, elev);
       this.sun.color.set(0x8ea6ff);
     }
     this.hemi.intensity = hemi;

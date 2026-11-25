@@ -43,6 +43,8 @@ export class Player {
 
   heal(n) { if (this.state !== 'dead') this.hp = Math.min(100, this.hp + n); }
 
+  burn(n) { if (this.state === 'dead' || this.state === 'roll') return; this.hp -= n; this.lastHurt = this.time; this.events.push('burn'); if (this.hp <= 0) this.die('dragon'); }
+
   get busy() { return this.state !== 'move'; }
 
   hurt(amount, kx = 0, kz = 0, src = '', lift = 0) {

@@ -5,7 +5,7 @@ import { HALF, WATER } from './world.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const PROP = { barrel: { r: 0.42, hp: 20, mass: 1 }, crate: { r: 0.45, hp: 25, mass: 1.4 } };
-const BOOM_R = 5.2;
+const BOOM_R0 = 5.2;
 export const SAVE_KEY = 'kaos.save.v1';
 
 export const WorldSim = {
@@ -165,20 +165,21 @@ export const WorldSim = {
   breakProp(o, by) {
     if (o.k === 'barrel') { if (o.fuse < 0) o.fuse = 0.35; o.by = by || o.by; return; }
     this.props.delete(o.id);
-    this.emit('*', { t: 'obreak', id: o.id, x: r2(o.x), y: r2(o.y), z: r2(o.z) });
-    if (by && this.players.has(by)) this.give(by, { wood: 3 });
+    this.emit('*', { t: 'obreak', id: o.id, x: r2(o.x), y: r2(o.y), z: r2(o.z), gold: o.gold || 0 });
+    if (by && this.players.has(by)) this.give(by, o.loot || { wood: 3 });
   },
 
   explode(o) {
     this.props.delete(o.id);
     const { x, y, z } = o, by = o.by;
-    this.emit('*', { t: 'boom', x: r2(x), y: r2(y), z: r2(z) });
+    const BOOM_R = o.R || BOOM_R0, pw = o.power || 1;
+    this.emit('*', { t: 'boom', x: r2(x), y: r2(y), z: r2(z), r: BOOM_R });
     for (const m of this.mobs.values()) {
       if (m.dead) continue;
       const d = Math.hypot(m.x - x, m.z - z);
       if (d > BOOM_R) continue;
       const k = 1 - d / BOOM_R, ux = d > 0.01 ? (m.x - x) / d : 1, uz = d > 0.01 ? (m.z - z) / d : 0;
-      this.damageMob(m, { dmg: Math.round(15 + 40 * k), knock: 6 + 8 * k, lift: 6 + 7 * k }, by, ux, uz);
+      this.damageMob(m, { dmg: Math.round((15 + 40 * k) * pw), knock: 6 + 8 * k, lift: 6 + 7 * k }, by, ux, uz);
     }
     for (const q of this.players.values()) {
       if (q.dead) continue;
@@ -308,7 +309,7 @@ export const WorldSim = {
   // [id, tür(0 varil,1 sandık), x, y, z, ry, yuvarlanma, bitler(1 fitil, 2 taşınıyor)]
   propSnapshot() {
     const out = [];
-    for (const o of this.props.values()) out.push([o.id, o.k === 'barrel' ? 0 : 1, r2(o.x), r2(o.y), r2(o.z), r2(o.ry), r2(o.roll), (o.fuse >= 0 ? 1 : 0) | (o.carriedBy ? 2 : 0)]);
+    for (const o of this.props.values()) out.push([o.id, o.k === 'barrel' ? 0 : 1, r2(o.x), r2(o.y), r2(o.z), r2(o.ry), r2(o.roll), (o.fuse >= 0 ? 1 : 0) | (o.carriedBy ? 2 : 0) | (o.gold === 1 ? 4 : 0) | (o.gold === 2 ? 8 : 0)]);
     return out;
   },
 

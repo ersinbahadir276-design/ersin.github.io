@@ -2,8 +2,9 @@
 // odayı kuranın cihazında çalışır; istemciler yalnızca anlık görüntü (snapshot) alır.
 import { HALF } from './world.js';
 import { WorldSim } from './simworld.js';
+import { BossSim, GIANT, DRAGON } from './simboss.js';
 
-export const MOB_TYPES = ['wolf'];
+export const MOB_TYPES = ['wolf', 'giant', 'dragon'];
 const WOLF = { hp: 45, r: 0.45, walk: 1.6, chase: 6.2, lunge: 8.8, retreat: 4.2, bite: 6, ring: 2.9, detect: 17 };
 export const ATTACKS = {
   jab: { dmg: 12, reach: 1.9, arc: 0.5, knock: 4, lift: 1.5 },
@@ -30,6 +31,7 @@ export class Sim {
     this.respawnT = 0;
     for (let i = 0; i < 3; i++) this.spawnPack();
     this.initWorld(opts);
+    this.initBoss();
   }
 
   addPlayer(id, name) { this.players.set(id, { id, name, x: this.world.spawn.x, y: 0, z: this.world.spawn.z, ry: 0, hp: 100, dead: false, crouch: false, swim: false }); }
@@ -82,7 +84,9 @@ export class Sim {
     for (const m of this.mobs.values()) {
       if (m.dead) continue;
       const dx = m.x - x, dz = m.z - z, d = Math.hypot(dx, dz);
-      if (d > A.reach + WOLF.r || Math.abs(m.y - p.y) > 2.5) continue;
+      const mr = m.type === 'giant' ? GIANT.r : m.type === 'dragon' ? DRAGON.r : WOLF.r;
+      const dy = m.y - p.y;
+      if (d > A.reach + mr || (m.type === 'giant' ? (dy > 2 || dy < -6) : Math.abs(dy) > (m.type === 'dragon' ? 3 : 2.5))) continue;
       if (d > 0.6 && (dx * fx + dz * fz) / d < A.arc) continue;
       this.damageMob(m, A, pid, d > 0.01 ? dx / d : fx, d > 0.01 ? dz / d : fz);
       hits++;
@@ -103,6 +107,14 @@ export class Sim {
   }
 
   damageMob(m, A, pid, ux, uz) {
+    if (m.type !== 'wolf') { // dev ve ejderha fırlatılmaz, saldırana döner
+      m.hp -= A.dmg; m.hit++; m.hitRecent = 2;
+      m.kx = ux * A.knock * 0.15; m.kz = uz * A.knock * 0.15;
+      if (pid && this.players.has(pid)) m.target = pid;
+      this.emit('*', { t: 'mhit', id: m.id, dmg: A.dmg, by: pid, x: r2(m.x), y: r2(m.y + (m.type === 'giant' ? 3 : 1)), z: r2(m.z) });
+      if (m.hp <= 0) this.killMob(m, pid);
+      return;
+    }
     m.hp -= A.dmg; m.hit++;
     m.kx = ux * A.knock; m.kz = uz * A.knock;
     if (A.lift > 3) { m.vy = A.lift; m.air = true; m.spin = (Math.random() < 0.5 ? -1 : 1) * 9; m.st = 'launched'; }
@@ -116,6 +128,11 @@ export class Sim {
   killMob(m, by) {
     m.dead = true; m.hp = 0; m.deadT = 0; m.st = 'dead';
     this.emit('*', { t: 'mdie', id: m.id, by, type: m.type });
+    if (m.type === 'giant' || m.type === 'dragon') { // takım ödülü
+      const loot = m.type === 'giant' ? { wood: 30, stone: 30 } : { wood: 40, stone: 40 };
+      for (const q of this.players.values()) this.give(q.id, loot);
+      this.emit('*', { t: 'bossdown', type: m.type });
+    }
   }
 
   // --------------------------------------------------------- yapay zekâ
@@ -138,7 +155,7 @@ export class Sim {
         let best = null, bd = 1e9;
         for (const p of alive) {
           if (p.swim) continue;
-          const r = WOLF.detect * (p.crouch ? 0.5 : 1);
+          const r = WOLF.detect * (p.crouch ? 0.5 : 1) * (this.isNight() ? 1.5 : 1);
           for (const m of live) { const d = Math.hypot(m.x - p.x, m.z - p.z); if (d < r && d < bd) { bd = d; best = p; } }
         }
         if (best) {
@@ -152,11 +169,16 @@ export class Sim {
       pack.liveN = live.length;
     }
 
-    for (const m of this.mobs.values()) this.updateWolf(m, dt, W);
+    for (const m of [...this.mobs.values()]) {
+      if (m.type === 'wolf') this.updateWolf(m, dt, W);
+      else if (m.type === 'giant') this.updateGiant(m, dt, W);
+      else this.updateDragon(m, dt, W);
+    }
     this.updateWorld(dt);
+    this.updateBoss(dt);
 
     // birbirlerinin içine girmesinler
-    const list = [...this.mobs.values()].filter((m) => !m.dead);
+    const list = [...this.mobs.values()].filter((m) => !m.dead && m.type === 'wolf');
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j], dx = b.x - a.x, dz = b.z - a.z, mr = WOLF.r * 2, d2 = dx * dx + dz * dz;
       if (d2 < mr * mr && d2 > 1e-6) { const d = Math.sqrt(d2), k = (mr - d) * 0.5; a.x -= (dx / d) * k; a.z -= (dz / d) * k; b.x += (dx / d) * k; b.z += (dz / d) * k; }
@@ -270,12 +292,12 @@ export class Sim {
     const out = [];
     for (const m of this.mobs.values()) {
       if (cx !== undefined && Math.hypot(m.x - cx, m.z - cz) > radius) continue;
-      const fl = (m.dead ? 1 : 0) | (m.air ? 2 : 0) | (m.st === 'alert' ? 4 : 0) | (m.st === 'lunge' ? 8 : 0);
-      out.push([m.id, 0, r2(m.x), r2(m.y), r2(m.z), r2(m.ry), r2(m.spd), fl, Math.round((100 * m.hp) / m.maxHp), m.atk, m.hit, m.howl, m.pack.tint]);
+      const fl = (m.dead ? 1 : 0) | (m.air && m.type === 'wolf' ? 2 : 0) | (m.st === 'alert' ? 4 : 0) | (m.st === 'lunge' ? 8 : 0) | (m.breath > 0 ? 16 : 0) | (m.st === 'rest' ? 32 : 0);
+      out.push([m.id, MOB_TYPES.indexOf(m.type), r2(m.x), r2(m.y), r2(m.z), r2(m.ry), r2(m.spd), fl, Math.round((100 * m.hp) / m.maxHp), m.atk, m.hit, m.howl, m.pack ? m.pack.tint : 0]);
     }
     return out;
   }
 }
 
 // dünya özellikleri (kaynak, yapı, tuzak, fizik nesneleri, patlama, taşıma, kayıt)
-Object.assign(Sim.prototype, WorldSim);
+Object.assign(Sim.prototype, WorldSim, BossSim);

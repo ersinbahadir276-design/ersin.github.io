@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { World, WATER } from './world.js';
 import { Sky } from './sky.js';
-import { Particles } from './fx.js';
+import { Particles, LightPool } from './fx.js';
+import { EVENT_TEXT, HOUR_SEC } from './simboss.js';
 import { loadAssets } from './assets.js';
 import { HATS } from './character.js';
 import { Player } from './player.js';
@@ -41,13 +42,16 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 16
 const sky = new Sky(scene);
 if (COARSE) sky.sun.shadow.mapSize.set(1024, 1024);
 const parts = new Particles(scene, 500, false);
+const glow = new Particles(scene, 400, true);
+const rain = new Particles(scene, 500, true);
+const lights = new LightPool(scene, 3);
 
 const G = {
   mode: 'loading', assets: null, world: null, player: null, ch: null, sim: null, mobs: null, others: null,
   net: new Net(), isHost: false, myId: 'h', roomCode: null, pvp: false, infos: new Map(),
   yaw: 0, pitch: 0.28, camMode: 0, camD: 4.5, shake: 0, time: 0, hour: 10.5, last: performance.now(),
   name: 'Oyuncu', color: '#ff6b35', hat: 'parti', sendT: 0, snapT: 0,
-  structs: null, props: null, build: null, inv: { wood: 10, stone: 5 }, chestId: null,
+  structs: null, props: null, build: null, inv: { wood: 10, stone: 5 }, chestId: null, storm: 0, meteors: [], bolts: [],
 };
 window.KAOS = G;
 
@@ -294,6 +298,8 @@ function clientOnMsg(m) {
       G.others.apply(m.p, G.myId);
       G.mobs.apply(m.m);
       if (m.o) G.props.apply(m.o);
+      if (m.h !== undefined) { let dh = m.h - G.hour; if (dh > 12) dh -= 24; if (dh < -12) dh += 24; if (Math.abs(dh) > 0.05) G.hour = m.h; }
+      G.storm = m.st || 0;
       break;
     case 'join': addOther(m.p); showHint(`${m.p.name} adaya düştü!`, 4000); sfx.boing(0.6); break;
     case 'leave': removeOther(m.id); showHint(`${m.name} oyundan ayrıldı`, 4000); break;
@@ -326,7 +332,7 @@ function onSimMsg(m) {
       floatText(m.big ? 'UÇTUN!' : COMIC[Math.floor(Math.random() * COMIC.length)], m.x, m.y + 2.2, m.z, m.big ? 'big' : 'pow');
       break;
     }
-    case 'mdie': sfx.yelp(1); sfx.thud(0.4); break;
+    case 'mdie': { const v = G.mobs.views.get(m.id); if (m.type === 'wolf') sfx.yelp(1); else { sfx.boom(v ? att(v.x, v.z, 80) : 0.5); G.shake = 0.6; } sfx.thud(0.4); break; }
     case 'heal': p.heal(m.amt); floatText('+' + m.amt, p.x, p.y + 2.1, p.z, 'heal'); sfx.pickup(); break;
     case 'give': {
       let row = 0;
@@ -347,15 +353,32 @@ function onSimMsg(m) {
     case 'sup': { const r = G.structs.update(m); if (r) { if (m.fire) sfx.spring(att(r.x, r.z, 40)); if (m.open !== undefined) sfx.creak(att(r.x, r.z, 25) * 0.6); if (m.hp !== undefined) { sfx.chop(att(r.x, r.z, 30)); parts.emit(r.x, r.y + 1, r.z, { n: 6, color: '#9a6a3c', spread: 1, speed: 2.5, up: 2.5, size: 0.12, life: 0.5, grav: -8 }); } if (m.inv && G.chestId === m.id) renderChest(); } break; }
     case 'sdel': { const r = G.structs.remove(m.id); if (r) { sfx.thud(att(r.x, r.z, 40)); parts.emit(r.x, r.y + 1, r.z, { n: 24, color: '#9a6a3c', spread: 1.6, speed: 4, up: 4, size: 0.2, life: 1, grav: -10 }); } if (G.chestId === m.id) closeChest(); break; }
     case 'ohit': sfx.pow(att(m.x, m.z) * 0.8); floatText(COMIC[Math.floor(Math.random() * COMIC.length)], m.x, m.y + 1.2, m.z, 'pow'); break;
-    case 'obreak': sfx.chop(att(m.x, m.z)); parts.emit(m.x, m.y + 0.4, m.z, { n: 20, color: '#b07a45', spread: 0.8, speed: 4, up: 4, size: 0.18, life: 0.9, grav: -12 }); break;
+    case 'obreak': if (m.gold) { sfx.task(); glow.emit(m.x, m.y + 0.6, m.z, { n: 30, color: '#ffd23f', spread: 0.6, speed: 5, up: 5, size: 0.1, life: 1, grav: -6 }); } sfx.chop(att(m.x, m.z)); parts.emit(m.x, m.y + 0.4, m.z, { n: 20, color: '#b07a45', spread: 0.8, speed: 4, up: 4, size: 0.18, life: 0.9, grav: -12 }); break;
     case 'boom': {
       const v = att(m.x, m.z, 80); sfx.boom(v);
-      parts.emit(m.x, m.y + 0.5, m.z, { n: 40, color: '#ffb02a', spread: 1.2, speed: 9, up: 6, size: 0.25, life: 0.6, grav: -4 });
+      const rs = (m.r || 5.2) / 5.2;
+      parts.emit(m.x, m.y + 0.5, m.z, { n: Math.round(40 * rs), color: '#ffb02a', spread: 1.2, speed: 9 * rs, up: 6, size: 0.25, life: 0.6, grav: -4 });
+      glow.emit(m.x, m.y + 0.8, m.z, { n: 20, color: '#ffe066', spread: 1, speed: 7 * rs, up: 5, size: 0.15, life: 0.5, grav: -2 });
       parts.emit(m.x, m.y + 0.8, m.z, { n: 26, color: '#4a4a4a', spread: 1.5, speed: 3, up: 3, size: 0.6, life: 1.6, grav: 1, grow: true });
       floatText('KABUM!', m.x, m.y + 2, m.z, 'big');
       G.shake = Math.max(G.shake, 0.7 * v);
       break;
     }
+    case 'event': {
+      const [big, small] = EVENT_TEXT[m.k] || [m.k, ''];
+      banner(big, small, m.k === 'chest' ? 'gold' : 'warn');
+      sfx.night();
+      if (m.k === 'meteor') G.meteors.push({ x: m.x, z: m.z, t: 0 });
+      if (m.k === 'chest' || m.k === 'giant' || m.k === 'hunt') setTimeout(() => showHint(`${small} Yön: ${dirName(m.x, m.z)} (${Math.round(Math.hypot(m.x - p.x, m.z - p.z))} m)`, 7000), 3500);
+      break;
+    }
+    case 'bolt': G.bolts.push({ x: m.x, y: m.y, z: m.z, t: 0 }); flashSky(); break;
+    case 'smash': { const v = att(m.x, m.z, 45); sfx.thud(v); sfx.boom(v * 0.5); G.shake = Math.max(G.shake, 0.6 * v); for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; parts.emit(m.x + Math.cos(a) * 2, m.y + 0.2, m.z + Math.sin(a) * 2, { n: 2, color: '#c9b48a', spread: 0.3, speed: 4, up: 3, size: 0.25, life: 0.8, grav: -6 }); } floatText('GÜÜM!', m.x, m.y + 2, m.z, 'big'); break; }
+    case 'roar': { const v = G.mobs.views.get(m.id); const a = v ? att(v.x, v.z, 90) : 0.5; sfx.growl(a); sfx.growl(a); if (m.dragon) sfx.howl(a * 0.6); break; }
+    case 'burn': p.burn(m.amt); flashColor('rgba(255,120,0,0.55)'); break;
+    case 'daybreak': banner(`GÜN ${m.day}`, 'Güneş doğdu, yaşıyorsunuz!', 'gold'); sfx.day(); break;
+    case 'nightfall': banner('GECE ÇÖKTÜ', 'Kurtlar daha uzaktan fark ediyor…', 'warn'); sfx.night(); break;
+    case 'bossdown': banner(m.type === 'giant' ? 'DEV DEVRİLDİ!' : 'EJDERHA DÜŞTÜ!', 'Herkese bol odun ve taş!', 'gold'); sfx.day(); break;
     case 'grab': if (m.by === G.myId) { p.carrying = true; sfx.grunt(1); } else sfx.grunt(att(p.x, p.z) * 0.5); updateInteract(); break;
     case 'throw': if (m.by === G.myId) p.carrying = false; if (m.big) sfx.boing(0.6); updateInteract(); break;
     case 'carried': p.carriedBy = m.by; p.escapeN = 0; showHint('Biri seni kaldırdı! Kurtulmak için 3 kez ZIPLA', 4000); break;
@@ -364,6 +387,63 @@ function onSimMsg(m) {
     case 'bite': sfx.bite(1); sfx.growl(0.6); break;
     case 'thud': { const v = G.mobs.views.get(m.id); if (v) { sfx.thud(att(v.x, v.z, 30) * 0.6); parts.emit(v.x, v.y + 0.1, v.z, { n: 10, color: '#c9b48a', spread: 0.6, speed: 2.5, up: 1.6, size: 0.14, life: 0.6, grav: -4 }); } break; }
   }
+}
+
+// ---------------------------------------------------------------- olay görselleri
+let bannerT = 0;
+function banner(big, small, cls) {
+  $('bnBig').textContent = big; $('bnSmall').textContent = small || ''; $('banner').className = 'show ' + (cls || '');
+  clearTimeout(bannerT); bannerT = setTimeout(() => { $('banner').className = ''; }, 4200);
+}
+function dirName(x, z) {
+  const p = G.player, a = Math.atan2(x - p.x, z - p.z) - G.yaw; // kameraya göre
+  const d = ((a % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+  return Math.abs(d) < 0.6 ? 'tam önünde' : Math.abs(d) > 2.5 ? 'arkanda' : d > 0 ? 'solunda' : 'sağında';
+}
+function flashColor(c) { const h = $('hurt'); h.style.background = `radial-gradient(ellipse at center, rgba(0,0,0,0) 35%, ${c})`; h.style.transition = 'none'; h.style.opacity = '1'; requestAnimationFrame(() => { h.style.transition = 'opacity 0.6s'; h.style.opacity = '0'; setTimeout(() => { h.style.background = ''; }, 650); }); }
+function flashSky() { const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '0.75'; requestAnimationFrame(() => { f.style.transition = 'opacity 0.35s'; f.style.opacity = '0'; }); sfx.boom(0.35); }
+const meteorMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 0), new THREE.MeshBasicMaterial({ color: '#ff8a2a' }));
+const boltMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 60, 5), new THREE.MeshBasicMaterial({ color: '#e8f4ff', transparent: true }));
+meteorMesh.visible = false; boltMesh.visible = false; scene.add(meteorMesh); scene.add(boltMesh);
+function updateFx(dt) {
+  const p = G.player;
+  // meteorlar: 2.6 sn'de gökten iner
+  meteorMesh.visible = false;
+  for (let i = G.meteors.length - 1; i >= 0; i--) {
+    const m = G.meteors[i]; m.t += dt; const k = Math.min(1, m.t / 2.6), gy = G.world.heightAt(m.x, m.z);
+    const x = m.x + (1 - k) * 40, y = gy + (1 - k) * 90, z = m.z + (1 - k) * 25;
+    meteorMesh.visible = true; meteorMesh.position.set(x, y, z); meteorMesh.rotation.x += dt * 5;
+    glow.emit(x, y, z, { n: 3, color: '#ffb02a', spread: 0.8, speed: 1, up: 1, size: 0.35, life: 0.5, grav: 0 });
+    parts.emit(x, y, z, { n: 1, color: '#555', spread: 0.6, speed: 0.5, up: 1, size: 0.6, life: 1.4, grav: 0, grow: true });
+    if (m.t > 2.7) G.meteors.splice(i, 1);
+  }
+  // yıldırım
+  boltMesh.visible = false;
+  for (let i = G.bolts.length - 1; i >= 0; i--) { const b = G.bolts[i]; b.t += dt; boltMesh.visible = true; boltMesh.position.set(b.x, b.y + 30, b.z); boltMesh.material.opacity = Math.max(0, 1 - b.t * 4); if (b.t > 0.3) G.bolts.splice(i, 1); }
+  // yağmur
+  if (G.storm) { for (let i = 0; i < 10; i++) rain.emit(p.x + (Math.random() - 0.5) * 40, p.y + 14, p.z + (Math.random() - 0.5) * 40, { n: 1, color: '#7fa8d8', spread: 0, speed: 0.5, up: -26, grav: -20, life: 0.7, size: 0.05 }); }
+  // ejderha ateşi
+  for (const v of G.mobs.views.values()) {
+    if (v.type !== 'dragon' || !v.breathing) continue;
+    const fx = Math.sin(v.ry), fz = Math.cos(v.ry);
+    for (let i = 0; i < 4; i++) {
+      const sp = 9 + Math.random() * 5;
+      glow.emit(v.mouth.x, v.mouth.y, v.mouth.z, { n: 1, color: Math.random() < 0.5 ? '#ff7a1a' : '#ffd23a', spread: 0.3, speed: 0.6, up: -3.5, grav: 0, life: 0.9, size: 0.35 });
+      const last = glow.n - 1; if (last >= 0) { const k = last * 13; glow.d[k + 3] = fx * sp + (Math.random() - 0.5) * 2; glow.d[k + 5] = fz * sp + (Math.random() - 0.5) * 2; }
+    }
+    if (Math.random() < dt * 3) sfx.burn(att(v.x, v.z, 40));
+  }
+  rain.update(dt); glow.update(dt);
+  // ışıklar: kamp ateşleri ve ejderha nefesi
+  const src = [];
+  for (const r of G.structs.map.values()) if (r.k === 'fire') src.push({ x: r.x, y: r.y + 1.2, z: r.z, i: 30 + Math.random() * 4, d: 22 });
+  for (const v of G.mobs.views.values()) if (v.type === 'dragon' && v.breathing) src.push({ x: v.mouth.x, y: v.mouth.y, z: v.mouth.z, i: 35, d: 20 });
+  lights.update(src, p.x, p.z);
+  // boss çubuğu
+  let boss = null, bd = 60;
+  for (const v of G.mobs.views.values()) { if (v.type === 'wolf' || v.dead) continue; const d = Math.hypot(v.x - p.x, v.z - p.z); if (d < bd) { bd = d; boss = v; } }
+  $('bossBar').classList.toggle('hidden', !boss);
+  if (boss) { $('bossName').textContent = boss.type === 'giant' ? 'DEV' : 'EJDERHA'; $('bossHp').style.width = boss.hp + '%'; }
 }
 
 // ---------------------------------------------------------------- ağ + simülasyon döngüsü
@@ -378,6 +458,7 @@ function netTick(dt) {
     S.events.length = 0;
     G.mobs.apply(S.snapshot());
     G.props.apply(S.propSnapshot());
+    G.hour = S.hour; G.storm = S.storm > 0 ? 1 : 0;
     const rows = [myRow(), ...remoteState.values()];
     G.others.apply(rows, 'h');
     staleT -= dt;
@@ -387,7 +468,7 @@ function netTick(dt) {
       G.snapT = 1 / 15;
       for (const pid of net.conns.keys()) {
         const sp = S.players.get(pid);
-        net.sendTo(pid, { t: 'snap', p: rows, m: S.snapshot(sp ? sp.x : undefined, sp ? sp.z : undefined), o: S.propSnapshot() });
+        net.sendTo(pid, { t: 'snap', p: rows, m: S.snapshot(sp ? sp.x : undefined, sp ? sp.z : undefined), o: S.propSnapshot(), h: r2(S.hour), st: S.storm > 0 ? 1 : 0 });
       }
     }
   } else {
@@ -595,7 +676,7 @@ function floatText(text, x, y, z, cls) {
 function updateLabels(dt) {
   const p = G.player;
   for (const v of G.mobs.views.values()) {
-    if (v.showHp > 0 && !v.dead && Math.hypot(v.x - p.x, v.z - p.z) < 35) { if (placeEl(v.el, v.x, v.y + 1.25, v.z)) v.hpEl.style.width = v.hp + '%'; }
+    if (v.showHp > 0 && !v.dead && v.type === 'wolf' && Math.hypot(v.x - p.x, v.z - p.z) < 35) { if (placeEl(v.el, v.x, v.y + 1.25, v.z)) v.hpEl.style.width = v.hp + '%'; }
     else if (v.el._vis !== false) { v.el.style.display = 'none'; v.el._vis = false; }
   }
   for (const r of G.others.list.values()) {
@@ -638,7 +719,11 @@ function step(dt) {
   G.world.update(dt);
   parts.update(dt);
   if (G.ch.hat && G.ch.hat.userData.spin) G.ch.hat.userData.spin.rotation.y += dt * (6 + G.player.speed * 4);
+  if (!G.isHost) { G.hour += dt / HOUR_SEC; if (G.hour >= 24) G.hour -= 24; }
   sky.update(G.hour, camera, G.player);
+  if (G.storm) { sky.sun.intensity *= 0.35; sky.hemi.intensity *= 0.55; scene.fog.near *= 0.5; scene.fog.far *= 0.55; }
+  setAmbience(Math.max(sky.night, G.storm ? 0.6 : 0));
+  updateFx(dt);
   updateHUD(dt);
   updateLabels(dt);
   input.endFrame();
