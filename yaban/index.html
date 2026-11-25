@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YABAN — Arkadaşlarınla Hayatta Kal</title>
+<meta name="description" content="Tarayıcıda arkadaşlarınla oynanan 3D hayatta kalma oyunu. Topla, üret, inşa et, geceleri Gölgelerden korun.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+<script src="lib/peerjs.min.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- ANA MENÜ -->
+<div id="menu" class="screen">
+  <div class="menu-box">
+    <h1 class="logo">YABAN</h1>
+    <div class="tag">Arkadaşlarınla bir adada hayatta kal.<br>Gündüz topla, üret, inşa et. Geceleri <b>Gölgeler</b> gelir.</div>
+    <label for="nameIn">Adın</label>
+    <input id="nameIn" maxlength="14" placeholder="Oyuncu" autocomplete="off">
+    <label>Rengin</label>
+    <div id="colors"></div>
+    <button id="btnHost" class="big">Yeni Oda Kur</button>
+    <div class="or">ya da arkadaşının odasına katıl</div>
+    <div class="row">
+      <input id="codeIn" maxlength="5" placeholder="ODA KODU" autocomplete="off" spellcheck="false">
+      <button id="btnJoin">Katıl</button>
+    </div>
+    <div id="menuMsg"></div>
+    <details class="howto">
+      <summary>Nasıl oynanır?</summary>
+      <ul>
+        <li><kbd>W A S D</kbd> yürü, <kbd>Shift</kbd> koş, <kbd>Boşluk</kbd> zıpla, fare ile etrafa bak</li>
+        <li><kbd>Sol Tık</kbd> vur / topla / ye / yerleştir</li>
+        <li><kbd>1</kbd>–<kbd>0</kbd> veya tekerlek: eşya seç · <kbd>C</kbd> üretim menüsü</li>
+        <li><kbd>E</kbd> su iç / ateşe odun at · <kbd>Q</kbd> elindekini yere bırak</li>
+        <li><kbd>R</kbd> yapıyı döndür · <kbd>V</kbd> kamera · <kbd>Enter</kbd> sohbet · <kbd>M</kbd> ses</li>
+        <li>Odayı kuran kişi oyunu açık tutmalı. Kodu arkadaşlarına gönder, aynı dünyada buluşun!</li>
+      </ul>
+    </details>
+    <div id="touchNote" class="hidden">Bu oyun klavye ve fare ile oynanır (bilgisayar önerilir).</div>
+  </div>
+</div>
+
+<!-- YÜKLENİYOR -->
+<div id="loading" class="screen hidden"><div class="loadbox"><div class="spinner"></div><div id="loadingTxt">Bağlanılıyor…</div><button id="btnCancel">Vazgeç</button></div></div>
+
+<!-- OYUN ARAYÜZÜ -->
+<div id="hud" class="hidden">
+  <div id="labels"></div>
+  <div id="topLeft">
+    <div id="clock"><div id="sunIcon"></div><div><div id="dayTxt">Gün 1</div><div id="timeTxt">07:30</div></div></div>
+    <div id="roomBox"><span>Oda kodu</span><b id="roomCode">…</b><button id="copyLink" title="Davet linkini kopyala">Linki kopyala</button></div>
+  </div>
+  <div id="topRight">
+    <div id="players"></div>
+    <div id="task"></div>
+  </div>
+  <div id="target" class="hidden"><div id="targetName"></div><div class="tbar"><i id="targetBar"></i></div></div>
+  <div id="crosshair"></div>
+  <div id="announce"><div id="annBig"></div><div id="annSmall"></div></div>
+  <div id="feed"></div>
+  <div id="bottom">
+    <div id="prompt"></div>
+    <div id="heldName"></div>
+    <div id="hotbar"></div>
+  </div>
+  <div id="bars">
+    <div class="stat" id="stHp"><span class="ic">❤</span><div class="bar"><i id="hpBar"></i></div></div>
+    <div class="stat" id="stFood"><span class="ic">🍖</span><div class="bar"><i id="foodBar"></i></div></div>
+    <div class="stat" id="stWater"><span class="ic">💧</span><div class="bar"><i id="waterBar"></i></div></div>
+    <div class="stat" id="stStam"><span class="ic">⚡</span><div class="bar"><i id="stamBar"></i></div></div>
+  </div>
+  <div id="chat"><div id="chatLog"></div><input id="chatIn" class="hidden" maxlength="120" placeholder="Mesaj yaz, Enter ile gönder…" autocomplete="off"></div>
+  <div id="hints"><kbd>C</kbd> Üretim · <kbd>E</kbd> Etkileşim · <kbd>Q</kbd> Bırak · <kbd>Enter</kbd> Sohbet · <kbd>V</kbd> Kamera</div>
+  <div id="hurt"></div>
+  <div id="vignette"></div>
+</div>
+
+<!-- ÜRETİM -->
+<div id="craft" class="hidden">
+  <div class="craft-head"><h2>Üretim</h2><span>Tıkla: 1 adet · Shift+Tık: 10 adet · <kbd>C</kbd> kapat</span></div>
+  <div id="recipes"></div>
+</div>
+
+<!-- DURAKLAT -->
+<div id="pause" class="screen hidden"><div class="pausebox"><div class="ptitle">Devam etmek için <b>tıkla</b></div><div class="psub">Fare imleci oyuna kilitlenir. <kbd>Esc</kbd> ile çıkarsın.</div>
+  <div class="settings">
+    <label>Fare hassasiyeti <b id="sensVal">1.0</b><input id="sens" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
+    <div class="srow"><button id="muteBtn">Ses: açık</button><button id="fsBtn">Tam ekran</button></div>
+  </div>
+  <div class="keys"><kbd>WASD</kbd> yürü · <kbd>Shift</kbd> koş · <kbd>Boşluk</kbd> zıpla · <kbd>Sol Tık</kbd> vur/topla · <kbd>C</kbd> üretim · <kbd>E</kbd> su iç / ateşe odun · <kbd>Q</kbd> bırak · <kbd>R</kbd> döndür · <kbd>V</kbd> kamera · <kbd>Enter</kbd> sohbet</div>
+</div></div>
+
+<!-- ÖLÜM -->
+<div id="dead" class="screen hidden"><div class="deadbox"><h1>ÖLDÜN</h1><p id="deadCause"></p><p id="deadInfo">Kaynakların öldüğün yerde bir çantada kaldı.</p><p class="respawn"><span id="deadTimer">6</span> sn içinde yeniden doğuyorsun…</p></div></div>
+
+<!-- BAĞLANTI KOPTU -->
+<div id="lost" class="screen hidden"><div class="deadbox"><h1>Bağlantı koptu</h1><p>Ev sahibi oyundan çıkmış olabilir.</p><button id="btnBack" class="big">Ana menüye dön</button></div></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
