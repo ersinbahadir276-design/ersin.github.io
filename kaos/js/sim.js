@@ -1,6 +1,7 @@
 // Ev sahibi simülasyonu: yaratık yapay zekâsı ve savaş. Tek oyunculuda yerelde, çok oyunculuda
 // odayı kuranın cihazında çalışır; istemciler yalnızca anlık görüntü (snapshot) alır.
 import { HALF } from './world.js';
+import { WorldSim } from './simworld.js';
 
 export const MOB_TYPES = ['wolf'];
 const WOLF = { hp: 45, r: 0.45, walk: 1.6, chase: 6.2, lunge: 8.8, retreat: 4.2, bite: 6, ring: 2.9, detect: 17 };
@@ -28,10 +29,17 @@ export class Sim {
     this.pvp = !!opts.pvp;
     this.respawnT = 0;
     for (let i = 0; i < 3; i++) this.spawnPack();
+    this.initWorld(opts);
   }
 
   addPlayer(id, name) { this.players.set(id, { id, name, x: this.world.spawn.x, y: 0, z: this.world.spawn.z, ry: 0, hp: 100, dead: false, crouch: false, swim: false }); }
-  removePlayer(id) { this.players.delete(id); for (const p of this.packs) if (p.target === id) p.target = null; }
+  removePlayer(id) {
+    const p = this.players.get(id);
+    if (p && p.carry) this.release(id, 0, 0);
+    if (p && p.carriedBy) this.release(p.carriedBy, 0, 0);
+    this.players.delete(id);
+    for (const pk of this.packs) if (pk.target === id) pk.target = null;
+  }
   setPlayer(id, s) { const p = this.players.get(id); if (p) Object.assign(p, s); }
 
   emit(to, m) { this.events.push({ to, m }); }
@@ -90,6 +98,7 @@ export class Sim {
       this.emit('*', { t: 'phit', id: q.id, by: pid, x: r2(q.x), y: r2(q.y), z: r2(q.z), big: A.lift > 3 ? 1 : 0 });
       hits++;
     }
+    hits += this.attackWorld(pid, A, kind, x, z, ry, p);
     return hits;
   }
 
@@ -144,6 +153,7 @@ export class Sim {
     }
 
     for (const m of this.mobs.values()) this.updateWolf(m, dt, W);
+    this.updateWorld(dt);
 
     // birbirlerinin içine girmesinler
     const list = [...this.mobs.values()].filter((m) => !m.dead);
@@ -193,7 +203,8 @@ export class Sim {
         const dx = tgt.x - m.x, dz = tgt.z - m.z, d = Math.hypot(dx, dz) || 0.01;
         if (m.st === 'lunge') {
           mx = dx / d; mz = dz / d; speed = WOLF.lunge; face = Math.atan2(dx, dz);
-          if (d < 1.25) {
+          if (Math.abs(tgt.y - m.y) > 1.6) { m.st = 'circle'; m.cd = 1; }
+          else if (d < 1.25) {
             m.atk++; m.cd = 2.2 + Math.random() * 1.6; m.st = 'retreat'; m.stT = 0.7;
             this.emit(tgt.id, { t: 'dmg', amt: WOLF.bite, kx: r2(dx / d), kz: r2(dz / d), lift: 0, src: 'wolf' });
             this.emit('*', { t: 'bite', id: m.id });
@@ -214,7 +225,7 @@ export class Sim {
           m.st = 'circle';
           if (ed > 0.4) { mx = ex / ed; mz = ez / ed; speed = Math.min(WOLF.chase, 1.5 + ed * 2); }
           face = Math.atan2(dx, dz);
-          if (m.cd <= 0 && pack.attackers < 2 && !tgt.swim) { m.st = 'lunge'; m.stT = 1.2; pack.attackers++; }
+          if (m.cd <= 0 && pack.attackers < 2 && !tgt.swim && Math.abs(tgt.y - m.y) < 1.6) { m.st = 'lunge'; m.stT = 1.2; pack.attackers++; }
         }
         break;
       }
@@ -265,3 +276,6 @@ export class Sim {
     return out;
   }
 }
+
+// dünya özellikleri (kaynak, yapı, tuzak, fizik nesneleri, patlama, taşıma, kayıt)
+Object.assign(Sim.prototype, WorldSim);

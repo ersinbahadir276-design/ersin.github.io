@@ -110,3 +110,24 @@ body.touch #touch { display: block; }
 .ptag .php i { display: block; height: 100%; background: #4ecb71; }
 #lost { z-index: 40; background: rgba(10, 18, 30, 0.7); }
 body.touch #room { top: 6px; }
+
+#inv { position: absolute; left: 16px; top: 112px; display: flex; gap: 8px; }
+body.touch #inv { top: 112px; }
+.res { display: inline-flex; align-items: center; gap: 5px; background: rgba(0, 0, 0, 0.4); padding: 3px 9px 3px 5px; border-radius: 9px; font-weight: 900; font-size: 15px; }
+.res::before { content: ''; width: 16px; height: 16px; border-radius: 4px; }
+.res.wood::before { background: linear-gradient(135deg, #c48a52, #7a4a22); }
+.res.stone::before { background: linear-gradient(135deg, #c9c9c9, #777); border-radius: 50%; }
+#buildBar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 6px; max-width: calc(100vw - 40px); overflow-x: auto; pointer-events: auto; padding: 4px; scrollbar-width: none; }
+body.touch #buildBar { bottom: auto; top: 46px; max-width: calc(100vw - 280px); }
+.bp { flex: none; display: flex; flex-direction: column; align-items: center; padding: 6px 10px; border-radius: 10px; background: rgba(20, 28, 44, 0.85); border: 2px solid rgba(255, 255, 255, 0.15); font-size: 13px; }
+.bp small { font-weight: 700; opacity: 0.75; font-size: 11px; }
+.bp.on { border-color: #ffd23f; background: rgba(255, 210, 63, 0.25); }
+.bp.no { opacity: 0.5; }
+.tbtn.onbuild { display: none; }
+body.building .tbtn.onbuild { display: flex; }
+body.building .tbtn[data-act="attack"] { background: rgba(78, 203, 113, 0.8); }
+body.building .tbtn[data-act="attack"]::after { content: 'KOY'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: inherit; border-radius: 50%; }
+.float.give { color: #b8ff9a; font-size: 18px; }
+.float.heal { color: #7dff9a; }
+.mini.big2 { padding: 10px 16px; font-size: 15px; background: #ff6b35; }
+#chest { z-index: 28; background: rgba(10, 18, 30, 0.3); }

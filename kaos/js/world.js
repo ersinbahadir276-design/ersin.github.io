@@ -432,7 +432,7 @@ export class World {
     c.cells = null;
   }
 
-  collide(x, z, r) {
+  collide(x, z, r, y) {
     let sid = 0;
     for (let it = 0; it < 2; it++) {
       const cx = Math.floor(x / GC), cz = Math.floor(z / GC);
@@ -441,6 +441,7 @@ export class World {
         if (!arr) continue;
         for (const c of arr) {
           if (!c.active) continue;
+          if (y !== undefined && c.yMax !== undefined && (y >= c.yMax - 0.3 || y + 1.7 <= c.yMin)) continue;
           if (c.type === 'c') {
             const dx = x - c.x, dz = z - c.z, m = r + c.r, d2 = dx * dx + dz * dz;
             if (d2 < m * m) {

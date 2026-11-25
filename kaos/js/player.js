@@ -29,7 +29,19 @@ export class Player {
     this.events = []; // ses/efekt için: 'jump','land','step','attack','heavy','roll','splash','hurt','die'
     this.stepD = 0;
     this.radius = 0.35;
+    this.support = null;      // (x, z, maxY) -> yapı yüzeyi yüksekliği
+    this.carriedBy = null;    // biri seni taşıyorsa
+    this.carrying = false;    // sen bir şey taşıyorsan
+    this.escapeN = 0;
   }
+
+  groundAt(x, z) {
+    const t = this.world.heightAt(x, z);
+    if (!this.support) return t;
+    return Math.max(t, this.support(x, z, this.y + 0.6));
+  }
+
+  heal(n) { if (this.state !== 'dead') this.hp = Math.min(100, this.hp + n); }
 
   get busy() { return this.state !== 'move'; }
 
@@ -77,7 +89,22 @@ export class Player {
     }
     const ml = Math.hypot(mx, mz); if (ml > 0) { mx /= ml; mz /= ml; }
 
+    if (this.carriedBy) {
+      if (input.consume('jump')) { this.escapeN++; this.events.push('struggle'); }
+      input.consume('attack'); input.consume('heavy'); input.consume('roll');
+      this.vx = this.vz = this.vy = 0; this.onGround = false; this.airT = 1;
+      ch.setBase('fall');
+      ch.root.position.set(this.x, this.y, this.z); ch.root.rotation.y = this.ry;
+      ch.update(dt);
+      return;
+    }
+
     // --- eylemler
+    if (alive && this.state === 'move' && this.carrying && (input.consume('attack') || input.consume('heavy'))) {
+      this.state = 'attack'; this.stateT = 0.45; this.hitDone = true; this.ry = camYaw;
+      ch.play('attack', { ts: 1.7, fade: 0.06, start: 0.05 });
+      this.events.push('throw');
+    }
     if (alive && this.state === 'move') {
       if (input.consume('crouch')) { this.crouch = !this.crouch; this.dance = false; }
       if (input.consume('dance')) { this.dance = !this.dance; this.crouch = false; }
@@ -138,7 +165,7 @@ export class Player {
     this.vz += (tvz - this.vz) * Math.min(1, acc * dt);
 
     // --- dikey
-    const gh = W.heightAt(this.x, this.z);
+    const gh = this.groundAt(this.x, this.z);
     const deep = gh < FLOAT_Y - 0.15;
     if (deep && this.y <= FLOAT_Y + 0.05 && this.vy <= 0.5) {
       if (!this.swim) { this.events.push('splash'); this.crouch = false; }
@@ -172,7 +199,7 @@ export class Player {
         else { nx = this.x; nz = this.z; }
       }
     }
-    const c = W.collide(nx, nz, this.radius);
+    const c = W.collide(nx, nz, this.radius, this.y);
     nx = c.x; nz = c.z;
     const rr = Math.hypot(nx, nz), lim = HALF - 6;
     if (rr > lim) { nx *= lim / rr; nz *= lim / rr; }

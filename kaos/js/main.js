@@ -11,6 +11,10 @@ import { Sim } from './sim.js';
 import { MobViews } from './mobview.js';
 import { RemotePlayers, makePlayerCharacter } from './remote.js';
 import { Net } from './net.js';
+import { Structs, PIECES } from './structures.js';
+import { PropViews } from './props.js';
+import { BuildMode } from './build.js';
+import { loadSave } from './simworld.js';
 import { initAudio, sfx, setAmbience, setMuted, isMuted } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -43,6 +47,7 @@ const G = {
   net: new Net(), isHost: false, myId: 'h', roomCode: null, pvp: false, infos: new Map(),
   yaw: 0, pitch: 0.28, camMode: 0, camD: 4.5, shake: 0, time: 0, hour: 10.5, last: performance.now(),
   name: 'Oyuncu', color: '#ff6b35', hat: 'parti', sendT: 0, snapT: 0,
+  structs: null, props: null, build: null, inv: { wood: 10, stone: 5 }, chestId: null,
 };
 window.KAOS = G;
 
@@ -81,6 +86,7 @@ function setupMenu() {
   const oda = (QS.get('oda') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
   if (oda) { $('codeIn').value = oda; $('btnJoin').classList.add('pulse'); menuMsg('Arkadaşın seni davet etti! Adını yaz ve Katıl\'a bas.', true); }
   $('btnHost').onclick = () => { readProfile(); startHost(); };
+  setupSaveOption();
   $('btnJoin').onclick = () => {
     readProfile();
     const code = $('codeIn').value.trim().toUpperCase();
@@ -90,6 +96,10 @@ function setupMenu() {
   $('codeIn').addEventListener('input', () => { $('codeIn').value = $('codeIn').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
   $('btnCancel').onclick = () => { location.href = location.pathname; };
   $('btnBack').onclick = () => { location.href = location.pathname; };
+}
+function setupSaveOption() {
+  const sv = loadSave();
+  if (sv && sv.structs.length) { $('saveRow').classList.remove('hidden'); $('saveInfo').textContent = `${sv.structs.length} yapı`; }
 }
 function menuMsg(t, good) { const m = $('menuMsg'); m.textContent = t; m.style.color = good ? '#ffd23f' : '#ff8a7a'; }
 function readProfile() {
@@ -110,11 +120,16 @@ loadAssets((p) => { $('loadBar').style.width = Math.round(p * 100) + '%'; }).the
 function startHost() {
   G.isHost = true; G.myId = 'h';
   G.pvp = $('pvpIn').checked;
-  G.sim = new Sim(G.world, { pvp: G.pvp });
+  const save = !$('saveRow').classList.contains('hidden') && $('saveIn').checked ? loadSave() : null;
+  if (save && save.seed !== G.world.seed) makeWorld(save.seed);
+  G.sim = new Sim(G.world, { pvp: G.pvp, save });
   G.sim.addPlayer('h', G.name);
   G.infos.set('h', myInfo());
   G.net.onPeerLeave = (pid) => hostRemovePlayer(pid);
   enterPlay();
+  G.sim.surface = (x, z, y) => G.structs.topAt(x, z, y);
+  for (const st of G.sim.structs.values()) G.structs.add(st);
+  if (save) showHint(`Kayıtlı ada yüklendi: ${save.structs.length} yapı`, 5000);
   $('roomCode').textContent = '…';
   G.net.startHost((code) => {
     G.roomCode = code; $('roomCode').textContent = code; $('shareBtn').classList.remove('hidden');
@@ -163,6 +178,10 @@ function checkWelcome() {
       G.pvp = !!m.pvp;
       enterPlay();
       for (const info of m.players) if (info.id !== G.myId) addOther(info);
+      if (m.ws) {
+        for (const [id, hp, alive] of m.ws.nodes) G.world.setNodeState(id, hp, alive, null, null, true);
+        for (const st of m.ws.structs) G.structs.add(st);
+      }
       showHint(m.players.length > 1 ? `Odaya katıldın! ${m.players.length - 1} arkadaşın burada.` : 'Odaya katıldın!', 6000);
       return;
     }
@@ -179,6 +198,15 @@ function enterPlay() {
   G.yaw = Math.atan2(-G.player.x, -G.player.z);
   G.mobs = new MobViews(scene, G.assets, $('labels'));
   G.others = new RemotePlayers(scene, G.assets, $('labels'));
+  G.structs = new Structs(scene, G.world);
+  G.props = new PropViews(scene);
+  G.player.support = (x, z, y) => G.structs.topAt(x, z, y);
+  G.build = new BuildMode({
+    scene, world: G.world, structs: G.structs, inv: G.inv, bar: $('buildBar'),
+    getPlayer: () => G.player, getYaw: () => G.yaw,
+    onPlace: (b) => { sendHost({ t: 'build', k: b.k, x: r2(b.x), y: r2(b.y), z: r2(b.z), ry: r2(b.ry) }); renderInv(); },
+  });
+  renderInv();
   G.mode = 'play';
   input.enabled = true;
   $('menu').classList.add('hidden'); $('joinScr').classList.add('hidden');
@@ -228,14 +256,14 @@ function hostOnMsg(pid, m) {
     const used = new Set([...G.infos.values()].map((i) => i.color));
     if (used.has(info.color)) info.color = COLORS.find((c) => !used.has(c)) || info.color;
     G.sim.addPlayer(pid, info.name);
-    G.net.sendTo(pid, { t: 'welcome', id: pid, seed: G.world.seed, pvp: G.pvp, players: [...G.infos.values(), info] });
+    G.net.sendTo(pid, { t: 'welcome', id: pid, seed: G.world.seed, pvp: G.pvp, players: [...G.infos.values(), info], ws: G.sim.worldState() });
     G.net.broadcast({ t: 'join', p: info }, pid);
     G.infos.set(pid, info);
     lastSeen.set(pid, performance.now());
     return;
   }
   if (!G.infos.has(pid)) return;
-  lastSeen.set(pid, performance.now());
+  if (pid !== 'h') lastSeen.set(pid, performance.now());
   if (m.t === 'st') {
     const num = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : d);
     const row = [pid, num(m.x), num(m.y), num(m.z), num(m.ry), String(m.b || 'idle').slice(0, 12), num(m.bts, 1), String(m.o || '').slice(0, 12), num(m.q) | 0, num(m.hp, 100), num(m.fl) | 0];
@@ -244,7 +272,12 @@ function hostOnMsg(pid, m) {
   } else if (m.t === 'atk') {
     const sp = G.sim.players.get(pid);
     if (sp && Math.hypot(sp.x - m.x, sp.z - m.z) < 3) G.sim.attack(pid, m.k === 'heavy' ? 'heavy' : 'jab', m.x, m.z, m.ry);
-  }
+  } else if (m.t === 'build') G.sim.build(pid, m);
+  else if (m.t === 'door') G.sim.toggleDoor(pid, m.id);
+  else if (m.t === 'chest') G.sim.chestOp(pid, m);
+  else if (m.t === 'grab') G.sim.grab(pid);
+  else if (m.t === 'throw') { const sp = G.sim.players.get(pid); if (sp && sp.carry) G.sim.release(pid, 13, 6); }
+  else if (m.t === 'escape') G.sim.escape(pid);
 }
 
 function myRow() {
@@ -260,6 +293,7 @@ function clientOnMsg(m) {
     case 'snap':
       G.others.apply(m.p, G.myId);
       G.mobs.apply(m.m);
+      if (m.o) G.props.apply(m.o);
       break;
     case 'join': addOther(m.p); showHint(`${m.p.name} adaya düştü!`, 4000); sfx.boing(0.6); break;
     case 'leave': removeOther(m.id); showHint(`${m.name} oyundan ayrıldı`, 4000); break;
@@ -293,6 +327,39 @@ function onSimMsg(m) {
       break;
     }
     case 'mdie': sfx.yelp(1); sfx.thud(0.4); break;
+    case 'heal': p.heal(m.amt); floatText('+' + m.amt, p.x, p.y + 2.1, p.z, 'heal'); sfx.pickup(); break;
+    case 'give': {
+      let row = 0;
+      for (const [k, n] of Object.entries(m.items || {})) { if (!(k in G.inv) || !(n > 0)) continue; G.inv[k] += n; floatText(`+${n} ${k === 'wood' ? 'odun' : 'taş'}`, p.x, p.y + 2.2 + row * 0.4, p.z, 'give'); row++; }
+      if (row) { sfx.pickup(); renderInv(); }
+      break;
+    }
+    case 'node': {
+      const n = G.world.nodes[m.id];
+      if (!n) break;
+      const v = att(n.x, n.z, 40);
+      if (m.by && n.alive) { G.world.shakeNode(n, m.x, m.z); nodeFx(n, v); }
+      if (n.alive && !m.alive && (n.kind === 'pine' || n.kind === 'oak')) sfx.creak(v);
+      G.world.setNodeState(m.id, m.hp, m.alive, m.x, m.z);
+      break;
+    }
+    case 'struct': { const r = G.structs.add(m.s); sfx.build(att(r.x, r.z, 40)); parts.emit(r.x, r.y + 0.4, r.z, { n: 12, color: '#b08a5a', spread: 1.2, speed: 2.5, up: 2.5, size: 0.14, life: 0.6, grav: -6 }); break; }
+    case 'sup': { const r = G.structs.update(m); if (r) { if (m.fire) sfx.spring(att(r.x, r.z, 40)); if (m.open !== undefined) sfx.creak(att(r.x, r.z, 25) * 0.6); if (m.hp !== undefined) { sfx.chop(att(r.x, r.z, 30)); parts.emit(r.x, r.y + 1, r.z, { n: 6, color: '#9a6a3c', spread: 1, speed: 2.5, up: 2.5, size: 0.12, life: 0.5, grav: -8 }); } if (m.inv && G.chestId === m.id) renderChest(); } break; }
+    case 'sdel': { const r = G.structs.remove(m.id); if (r) { sfx.thud(att(r.x, r.z, 40)); parts.emit(r.x, r.y + 1, r.z, { n: 24, color: '#9a6a3c', spread: 1.6, speed: 4, up: 4, size: 0.2, life: 1, grav: -10 }); } if (G.chestId === m.id) closeChest(); break; }
+    case 'ohit': sfx.pow(att(m.x, m.z) * 0.8); floatText(COMIC[Math.floor(Math.random() * COMIC.length)], m.x, m.y + 1.2, m.z, 'pow'); break;
+    case 'obreak': sfx.chop(att(m.x, m.z)); parts.emit(m.x, m.y + 0.4, m.z, { n: 20, color: '#b07a45', spread: 0.8, speed: 4, up: 4, size: 0.18, life: 0.9, grav: -12 }); break;
+    case 'boom': {
+      const v = att(m.x, m.z, 80); sfx.boom(v);
+      parts.emit(m.x, m.y + 0.5, m.z, { n: 40, color: '#ffb02a', spread: 1.2, speed: 9, up: 6, size: 0.25, life: 0.6, grav: -4 });
+      parts.emit(m.x, m.y + 0.8, m.z, { n: 26, color: '#4a4a4a', spread: 1.5, speed: 3, up: 3, size: 0.6, life: 1.6, grav: 1, grow: true });
+      floatText('KABUM!', m.x, m.y + 2, m.z, 'big');
+      G.shake = Math.max(G.shake, 0.7 * v);
+      break;
+    }
+    case 'grab': if (m.by === G.myId) { p.carrying = true; sfx.grunt(1); } else sfx.grunt(att(p.x, p.z) * 0.5); updateInteract(); break;
+    case 'throw': if (m.by === G.myId) p.carrying = false; if (m.big) sfx.boing(0.6); updateInteract(); break;
+    case 'carried': p.carriedBy = m.by; p.escapeN = 0; showHint('Biri seni kaldırdı! Kurtulmak için 3 kez ZIPLA', 4000); break;
+    case 'release': p.carriedBy = null; p.vx = 0; p.vz = 0; p.hurt(0, m.kx, m.kz, 'throw', m.lift); break;
     case 'howl': { const v = G.mobs.views.get(m.id); sfx.howl(v ? att(v.x, v.z, 90) : 0.5); break; }
     case 'bite': sfx.bite(1); sfx.growl(0.6); break;
     case 'thud': { const v = G.mobs.views.get(m.id); if (v) { sfx.thud(att(v.x, v.z, 30) * 0.6); parts.emit(v.x, v.y + 0.1, v.z, { n: 10, color: '#c9b48a', spread: 0.6, speed: 2.5, up: 1.6, size: 0.14, life: 0.6, grav: -4 }); } break; }
@@ -310,6 +377,7 @@ function netTick(dt) {
     for (const e of S.events) { if (e.to === '*') net.broadcast(e.m); else net.sendTo(e.to, e.m); }
     S.events.length = 0;
     G.mobs.apply(S.snapshot());
+    G.props.apply(S.propSnapshot());
     const rows = [myRow(), ...remoteState.values()];
     G.others.apply(rows, 'h');
     staleT -= dt;
@@ -319,7 +387,7 @@ function netTick(dt) {
       G.snapT = 1 / 15;
       for (const pid of net.conns.keys()) {
         const sp = S.players.get(pid);
-        net.sendTo(pid, { t: 'snap', p: rows, m: S.snapshot(sp ? sp.x : undefined, sp ? sp.z : undefined) });
+        net.sendTo(pid, { t: 'snap', p: rows, m: S.snapshot(sp ? sp.x : undefined, sp ? sp.z : undefined), o: S.propSnapshot() });
       }
     }
   } else {
@@ -335,19 +403,86 @@ function netTick(dt) {
   while (q.length && G.mode === 'play') { const m = q.shift(); try { clientOnMsg(m); } catch (e) { console.error(e); } }
   G.mobs.update(dt);
   G.others.update(dt);
+  G.props.update(dt, G.time);
+  G.structs.tick(dt, G.time);
   // oyuncu kurtların ve arkadaşlarının içinden geçemesin (arkadaşını itebilirsin)
   const p = G.player;
   const push = (x, z, m) => { const dx = p.x - x, dz = p.z - z, d = Math.hypot(dx, dz); if (d < m && d > 1e-4) { p.x += (dx / d) * (m - d); p.z += (dz / d) * (m - d); } };
   for (const v of G.mobs.views.values()) if (!v.dead) push(v.x, v.z, 0.8);
-  for (const r of G.others.list.values()) if (!r.dead) push(r.x, r.z, 0.6);
+  for (const r of G.others.list.values()) if (!r.dead && !p.carriedBy && r.id !== p.carriedBy) push(r.x, r.z, 0.6);
+  for (const o of G.props.list.values()) if (!(o.fl & 2) && Math.abs(o.y - p.y) < 1.2) push(o.x, o.z, 0.42 + 0.35);
 }
 
+function sendHost(m) {
+  if (G.isHost) hostOnMsg('h', m); else G.net.toHost(m);
+}
 function sendAttack(kind) {
   const p = G.player;
   if (G.isHost) return G.sim.attack('h', kind, p.x, p.z, p.ry);
   G.net.toHost({ t: 'atk', k: kind, x: r2(p.x), z: r2(p.z), ry: r2(p.ry) });
   return 1;
 }
+
+// ---------------------------------------------------------------- kaynak, envanter, etkileşim
+function nodeFx(n, v) {
+  if (v < 0.02) return;
+  if (n.kind === 'pine' || n.kind === 'oak') {
+    parts.emit(n.x, n.y + 1.1, n.z, { n: 7, color: '#a0703c', spread: 0.6, speed: 3, up: 3, size: 0.12, life: 0.7 });
+    parts.emit(n.x, n.y + 3.2 * n.s, n.z, { n: 5, color: '#' + n.col.getHexString(), spread: 2.2, speed: 1, up: 0.5, size: 0.16, life: 1.5, grav: -3 });
+    sfx.chop(v);
+  } else if (n.kind === 'rock') {
+    parts.emit(n.x, n.y + 0.8 * n.s, n.z, { n: 8, color: '#a5a5a5', spread: 0.8, speed: 4, up: 3.5, size: 0.13, life: 0.6 });
+    sfx.stone(v);
+  } else {
+    parts.emit(n.x, n.y + 0.7, n.z, { n: 8, color: '#4a8c3c', spread: 1, speed: 2, up: 2.5, size: 0.12, life: 0.8 });
+    sfx.bush(v);
+  }
+}
+function renderInv() {
+  $('inv').innerHTML = `<span class="res wood">${G.inv.wood}</span><span class="res stone">${G.inv.stone}</span>`;
+  if (G.build) G.build.renderBar();
+}
+let interactWhat = null;
+function updateInteract() {
+  const p = G.player;
+  let what = null, label = 'TUT';
+  if (p.carrying) { what = { kind: 'drop' }; label = 'BIRAK'; }
+  else {
+    const door = G.structs.near(p.x, p.z, 2.7, 'door');
+    const chest = G.structs.near(p.x, p.z, 2.7, 'chest');
+    if (door) { what = { kind: 'door', id: door.id }; label = door.open ? 'KAPAT' : 'AÇ'; }
+    else if (chest) { what = { kind: 'chest', id: chest.id }; label = 'SANDIK'; }
+    else what = { kind: 'grab' };
+  }
+  interactWhat = what;
+  const b = $('btnInteract');
+  if (b._l !== label) { b._l = label; b.textContent = label; }
+}
+function doInteract() {
+  const w = interactWhat;
+  if (!w || G.player.state === 'dead') return;
+  if (w.kind === 'door') sendHost({ t: 'door', id: w.id });
+  else if (w.kind === 'chest') openChest(w.id);
+  else sendHost({ t: 'grab' });
+}
+function openChest(id) { G.chestId = id; $('chest').classList.remove('hidden'); renderChest(); if (document.exitPointerLock) document.exitPointerLock(); }
+function closeChest() { G.chestId = null; $('chest').classList.add('hidden'); input.requestLock(); }
+function renderChest() {
+  const r = G.structs.map.get(G.chestId);
+  if (!r) return;
+  const inv = r.inv || { wood: 0, stone: 0 };
+  $('chestTxt').innerHTML = `Sandıkta: <b>${inv.wood}</b> odun, <b>${inv.stone}</b> taş<br>Sende: <b>${G.inv.wood}</b> odun, <b>${G.inv.stone}</b> taş`;
+}
+$('chestPut').onclick = () => { if (!G.chestId) return; const items = { ...G.inv }; G.inv.wood = 0; G.inv.stone = 0; renderInv(); sendHost({ t: 'chest', id: G.chestId, op: 'put', items }); renderChest(); };
+$('chestTake').onclick = () => { if (G.chestId) sendHost({ t: 'chest', id: G.chestId, op: 'take' }); };
+$('chestClose').onclick = closeChest;
+$('buildBar').addEventListener('pointerdown', (e) => { const b = e.target.closest('.bp'); if (b) { e.stopPropagation(); G.build.select(+b.dataset.i); } });
+addEventListener('keydown', (e) => {
+  if (G.mode !== 'play' || !G.build || !G.build.on) return;
+  if (/^Digit\d$/.test(e.code)) { const n = +e.code[5]; G.build.select(n === 0 ? 9 : n - 1); }
+  if (e.code === 'Minus') G.build.select(10);
+});
+addEventListener('wheel', (e) => { if (G.mode === 'play' && G.build && G.build.on) G.build.select(G.build.sel + (e.deltaY > 0 ? 1 : -1)); }, { passive: true });
 
 // ---------------------------------------------------------------- oyuncu olayları -> ses & efekt
 function handleEvents() {
@@ -361,6 +496,8 @@ function handleEvents() {
       case 'attack': sfx.swing(1); break;
       case 'heavy': sfx.swing(1.2); break;
       case 'impactJab': sendAttack('jab'); break;
+      case 'throw': sendHost({ t: 'throw' }); sfx.swing(1.3); break;
+      case 'struggle': sfx.grunt(1); if (p.escapeN >= 3) { p.escapeN = 0; sendHost({ t: 'escape' }); } break;
       case 'impactHeavy': sendAttack('heavy'); sfx.thud(0.5); dust(p, 14); G.shake = Math.max(G.shake, 0.15); break;
       case 'splash': sfx.splash(); parts.emit(p.x, WATER, p.z, { n: 16, color: '#d8efff', spread: 0.8, speed: 3, up: 4, size: 0.12, life: 0.7 }); break;
       case 'hurt': sfx.hurt(); G.shake = 0.25; flash(); break;
@@ -478,7 +615,22 @@ function updateLabels(dt) {
 function step(dt) {
   G.time += dt;
   input.update(dt);
-  G.player.update(dt, input, G.yaw);
+  const p = G.player;
+  if (input.consume('build')) { G.build.toggle(); if (G.build.on) showHint('İnşa: parça seç, VUR/tık ile koy, DÖNDÜR/R ile çevir', 4000); }
+  if (G.build.on) {
+    if (input.consume('rotate')) G.build.rotate();
+    if (input.consume('attack') | input.consume('heavy')) { if (G.build.place()) sfx.ui(); else sfx.ui(); }
+  } else input.consume('rotate');
+  if (input.consume('interact')) doInteract();
+  p.update(dt, input, G.yaw);
+  if (p.carriedBy) {
+    const c = G.others.list.get(p.carriedBy);
+    if (c) { p.x = c.x; p.y = c.y + 2.0; p.z = c.z; p.ry = c.ry; p.ch.root.position.set(p.x, p.y, p.z); }
+    else p.carriedBy = null;
+  }
+  if (G.structs.near(p.x, p.z, 3.5, 'fire')) p.heal(5 * dt);
+  G.build.update();
+  updateInteract();
   handleEvents();
   netTick(dt);
   if (G.mode !== 'play') return;

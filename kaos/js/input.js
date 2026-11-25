@@ -21,7 +21,7 @@ export class Input {
   }
 
   _bindKeyboard() {
-    const map = { Space: 'jump', KeyC: 'crouch', ControlLeft: 'crouch', KeyQ: 'roll', KeyG: 'dance', KeyE: 'interact', KeyV: 'camera' };
+    const map = { Space: 'jump', KeyC: 'crouch', ControlLeft: 'crouch', KeyQ: 'roll', KeyG: 'dance', KeyE: 'interact', KeyF: 'interact', KeyV: 'camera', KeyB: 'build', KeyR: 'rotate', Escape: 'escape' };
     addEventListener('keydown', (e) => {
       if (!this.enabled || e.target.tagName === 'INPUT') return;
       if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();

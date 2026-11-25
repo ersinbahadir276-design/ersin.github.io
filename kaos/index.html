@@ -37,6 +37,7 @@
     <div id="hats" class="row wrap"></div>
     <button id="btnHost" class="big">Oda Kur</button>
     <label class="check"><input type="checkbox" id="pvpIn"> Arkadaşlar birbirinin canını azaltabilsin</label>
+    <label class="check hidden" id="saveRow"><input type="checkbox" id="saveIn" checked> Kayıtlı adaya devam et (<span id="saveInfo"></span>)</label>
     <div class="or">ya da arkadaşının odasına katıl</div>
     <div class="row">
       <input id="codeIn" maxlength="5" placeholder="ODA KODU" autocomplete="off" spellcheck="false">
@@ -46,6 +47,7 @@
     <details class="howto"><summary>Kontroller</summary>
       <p><b>Arkadaşlarla:</b> biri "Oda Kur"a basar, çıkan 5 harfli kodu ya da "Paylaş" linkini diğerlerine gönderir. 2–4 kişi oynayabilir. Odayı kuran oyunu kapatmamalı. Tek başına oynamak için de "Oda Kur"a bas.</p>
       <p><b>Telefon:</b> sol tarafta parmağını sürükle (hareket), sağ tarafı sürükle (kamera). Joystick'i kenarda tutarsan depar atarsın. VUR'a uzun basarsan ağır saldırı.</p>
+      <p><b>İnşa ve etkileşim:</b> ağaçlara ve kayalara vurarak odun/taş topla. İNŞA (<kbd>B</kbd>) ile parça seç, VUR (tık) ile koy, DÖNDÜR (<kbd>R</kbd>) ile çevir. TUT (<kbd>E</kbd>) ile kapı aç, sandığa eşya koy, arkadaşını ya da varili kaldır; VUR ile fırlat!</p>
       <p><b>Bilgisayar:</b> <kbd>WASD</kbd> hareket · <kbd>Shift</kbd> depar · <kbd>Alt</kbd> yürü · <kbd>Boşluk</kbd> zıpla · <kbd>C</kbd> çömel · <kbd>Q</kbd> yuvarlan · <kbd>Sol tık</kbd> vur (basılı tut: ağır) · <kbd>Sağ tık</kbd> ağır vuruş · <kbd>G</kbd> dans · <kbd>V</kbd> kamera</p>
     </details>
   </div>
@@ -59,6 +61,8 @@
   </div>
   <div id="room"><span>Oda</span><b id="roomCode">…</b><button id="shareBtn" class="mini hidden">Paylaş</button><span id="pvpTag" class="hidden">Dost ateşi açık</span></div>
   <div id="players"></div>
+  <div id="inv"></div>
+  <div id="buildBar" class="hidden"></div>
   <button id="dbg" class="mini">FPS</button>
   <div id="hint"></div>
   <div id="hurt"></div>
@@ -72,6 +76,9 @@
   <div class="tbtn small" data-act="crouch" style="right:132px;bottom:118px">ÇÖMEL</div>
   <div class="tbtn small" data-act="dance" style="right:16px;top:70px">DANS</div>
   <div class="tbtn small" data-act="camera" style="right:84px;top:70px">KAMERA</div>
+  <div class="tbtn" data-act="interact" id="btnInteract" style="right:212px;bottom:30px">TUT</div>
+  <div class="tbtn small" data-act="build" style="right:152px;top:70px">İNŞA</div>
+  <div class="tbtn small onbuild" data-act="rotate" style="right:212px;bottom:118px">DÖNDÜR</div>
 </div>
 
 <div id="pause" class="screen hidden">
@@ -82,6 +89,15 @@
       <label>Fare hassasiyeti <input id="sens" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
       <button id="muteBtn" class="mini">Ses: açık</button>
     </div>
+  </div>
+</div>
+
+<div id="chest" class="screen hidden">
+  <div class="card center">
+    <h2 class="logo small">SANDIK</h2>
+    <p id="chestTxt"></p>
+    <div class="row" style="justify-content:center;margin-top:12px"><button id="chestPut" class="mini big2">Hepsini koy</button><button id="chestTake" class="mini big2">Hepsini al</button></div>
+    <button id="chestClose" class="mini" style="margin-top:12px">Kapat</button>
   </div>
 </div>
 

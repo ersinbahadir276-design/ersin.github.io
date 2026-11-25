@@ -102,6 +102,9 @@ export const sfx = {
   bite(v = 1) { noise(0.06, { freq: 1800, q: 2, vol: 0.3 * v }); tone(140, 0.12, { type: 'square', vol: 0.08 * v, slide: -60 }); },
   pow(v = 1) { tone(220, 0.15, { type: 'square', vol: 0.12 * v, slide: -120 }); noise(0.1, { freq: 900, vol: 0.4 * v }); },
   boing(v = 1) { tone(180, 0.35, { type: 'sine', vol: 0.18 * v, slide: 420 }); },
+  boom(v = 1) { noise(1.1, { type: 'lowpass', freq: 900, q: 0.7, vol: 0.9 * v, sweep: -800, a: 0.005 }); tone(55, 0.9, { type: 'sine', vol: 0.7 * v, slide: -25 }); noise(0.25, { freq: 2500, vol: 0.4 * v }); },
+  build(v = 1) { tone(320, 0.08, { type: 'square', vol: 0.06 * v }); noise(0.08, { freq: 500, q: 2, vol: 0.4 * v, delay: 0.02 }); tone(160, 0.15, { type: 'triangle', vol: 0.25 * v, slide: -40, delay: 0.05 }); },
+  spring(v = 1) { tone(140, 0.5, { type: 'triangle', vol: 0.3 * v, slide: 900 }); },
   ui() { tone(880, 0.04, { type: 'square', vol: 0.04 }); },
   deny() { tone(160, 0.12, { type: 'square', vol: 0.06, slide: -40 }); },
 };
