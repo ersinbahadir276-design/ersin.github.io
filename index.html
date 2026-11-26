@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kaos Adası</title>
+<meta name="theme-color" content="#1b2a3a">
+<script>
+  // Ana adres doğrudan Kaos Adası'nı açar; davet linkindeki oda kodu (?oda=...) korunur.
+  location.replace('kaos/' + location.search + location.hash);
+</script>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b2a3a; color: #fff; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; box-sizing: border-box; }
+  a { display: block; margin: 12px auto; padding: 14px 22px; border-radius: 12px; background: #ff6b35; color: #fff; font-weight: 800; text-decoration: none; max-width: 260px; }
+  a.alt { background: #33b5e5; }
+</style>
+</head>
+<body>
+  <div>
+    <p>Oyun açılıyor…</p>
+    <a href="kaos/">Kaos Adası</a>
+    <a class="alt" href="yaban/">YABAN</a>
+  </div>
+</body>
+</html>
